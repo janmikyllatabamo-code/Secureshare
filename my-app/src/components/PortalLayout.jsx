@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { Outlet } from 'react-router-dom'
-import { PortalNavbar } from './PortalNavbar'
+import { PortalNavbar } from './portal/PortalNavbar'
 import { Sidebar } from './Sidebar'
 
 export const PortalLayout = () => {

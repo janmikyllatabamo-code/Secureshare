@@ -1,17 +1,19 @@
 import React from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
-import { Portal } from "./components/Portal";
+import { Portal } from "./components/portal/Portal";
 import { PortalLayout } from "./components/PortalLayout";
-import { FilesPage } from "./components/FilesPage";
-import { SharedPage } from "./components/SharedPage";
-import { TrashPage } from "./components/TrashPage";
-import { SettingsPage } from "./components/SettingsPage";
+import { FilesPage } from "./components/sidebar/FilesPage";
+import { SharedPage } from "./components/sidebar/SharedPage";
+import { TrashPage } from "./components/sidebar/TrashPage";
+import { SettingsPage } from "./components/sidebar/SettingsPage";
+import Login from "./components/login/Login";
 
 
 function App() {
   return (
     <Router>
       <Routes>
+        <Route path="/login" element={<Login />} />
         <Route path="/" element={<PortalLayout />}> 
           <Route index element={<Portal />} />
           <Route path="portal" element={<Portal />} />

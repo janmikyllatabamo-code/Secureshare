@@ -1,14 +1,16 @@
 import { useState } from 'react';
-import { Mail, Lock, CircleUserRound, Users, ShieldCheck} from 'lucide-react';
+import { Mail, Lock, CircleUserRound } from 'lucide-react';
 import { FaLock,  FaShieldAlt, FaUsers } from "react-icons/fa";
 import { IoShieldCheckmark } from "react-icons/io5";
+import Navbar from './Navbar';
 
 const Login = () => {
   const [action, setAction] = useState("Sign In");
 
   return (
-    <div className='container mx-auto bg-[#F2F2F2] min-h-screen'>
-      <header>
+    <div className='bg-[#F2F2F2] min-h-screen'>
+      <Navbar />
+      <header className='container mx-auto'>
         <section className='h-screen grid grid-cols-1 lg:grid-cols-2 justify-items-center items-center text-lg px-8 gap-8'>
           <div className='max-w-2xl'>
             <h1 className='text-4xl lg:text-6xl text-[#7A1C1C] font-black tracking-tight mb-10'>
@@ -151,3 +153,4 @@ const Login = () => {
 };
 
 export default Login;
+

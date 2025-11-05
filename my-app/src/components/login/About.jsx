@@ -1,9 +1,9 @@
 import React from 'react'
 import { FaFacebook, FaLinkedin, FaInstagram } from 'react-icons/fa'
 import { FaXTwitter } from "react-icons/fa6";
-import toniPic from '../assets/toni_pic.JPG'
-import mikaPic from '../assets/mika_pic.JPG'
-import andrianPic from '../assets/andrian_pic.JPG'
+import toniPic from '../../assets/toni_pic.JPG'
+import mikaPic from '../../assets/mika_pic.JPG'
+import andrianPic from '../../assets/andrian_pic.JPG'
 
 export const About = () => {
   return (
@@ -104,3 +104,5 @@ export const About = () => {
     </div>
   )
 }
+
+
