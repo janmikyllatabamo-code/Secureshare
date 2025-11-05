@@ -18,7 +18,7 @@ export const PortalNavbar = ({ onToggleSidebar }) => {
   }, [])
 
   const handleLogout = () => {
-    // TODO: Clear auth state if present
+    localStorage.removeItem('authUser')
     navigate('/login')
   }
 

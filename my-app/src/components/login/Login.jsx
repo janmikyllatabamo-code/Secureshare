@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Mail, Lock, CircleUserRound } from 'lucide-react';
 import { FaLock,  FaShieldAlt, FaUsers } from "react-icons/fa";
 import { IoShieldCheckmark } from "react-icons/io5";
@@ -6,6 +7,32 @@ import Navbar from './Navbar';
 
 const Login = () => {
   const [action, setAction] = useState("Sign In");
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [role, setRole] = useState("");
+  const navigate = useNavigate();
+
+  const handleSubmit = () => {
+    // Demo-only auth: accept any non-empty email/password
+    if (action === "Sign In") {
+      if (!email || !password) return;
+      localStorage.setItem(
+        'authUser',
+        JSON.stringify({ email })
+      );
+      navigate('/portal');
+      return;
+    }
+
+    // Register flow (demo): require minimal fields
+    if (!fullName || !email || !password || !role) return;
+    localStorage.setItem(
+      'authUser',
+      JSON.stringify({ fullName, email, role })
+    );
+    navigate('/portal');
+  };
 
   return (
     <div className='bg-[#F2F2F2] min-h-screen'>
@@ -50,9 +77,7 @@ const Login = () => {
             </ul>
           </div>
 
-          <div className='w-full max-w-[450px] rounded-lg bg-white text-center p-8 border-2 border-gray-200 ${
-    action === "Register" ? "h-auto lg:h-[640px]" : "h-auto lg:h-[520px]"
-  }`}'>
+          <div className={`w-full max-w-[450px] rounded-lg bg-white text-center p-8 border-2 border-gray-200 ${action === "Register" ? "h-auto lg:h-[600px]" : "h-auto lg:h-[520px]"}`}>
               <div className="flex flex-col items-center space-y-2 mb-6">
                 <div className="flex items-center justify-center bg-yellow-100 rounded-full w-16 h-16">
                   <FaShieldAlt size={30} color="#7A1C1C" strokeWidth={2.5} />
@@ -93,10 +118,12 @@ const Login = () => {
                     </label>
                     <div className="text-sm flex items-center h-10 border border-gray-400 rounded-lg px-3 mb-4">
                       <CircleUserRound size={20} color="#7A1C1C" className='mr-2' />
-                        <input
+                    <input
                         type="text"
                         placeholder="John Doe"
                         className="w-full outline-none bg-transparent"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
                         />
                     </div>
                     </>
@@ -111,21 +138,10 @@ const Login = () => {
                     type="email"
                     placeholder="student@university.edu"
                     className="w-full outline-none bg-transparent"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                     />
                 </div>
-
-                {action === "Sign In"? <div></div>:<div><div className="flex justify-start text-sm font-semibold text-[#7A1C1C] mb-1">
-                    Role
-                </div>
-                <div className="text-sm flex items-center h-10 border border-gray-400 rounded-lg px-3 mb-6 ">
-            
-                    <select>
-                        <option>Select your role</option>
-                        <option>Student</option>
-                        <option>Instructor</option>
-                        </select>
-                </div>
-                </div>}
 
                 <label className="flex justify-start text-sm font-semibold text-[#7A1C1C] mb-1">
                     Password
@@ -136,10 +152,12 @@ const Login = () => {
                     type="password"
                     placeholder="Enter your password"
                     className="w-full outline-none bg-transparent"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
                     />
                 </div>
 
-                  <button className="text-sm w-full bg-[#7A1C1C] hover:bg-[#5a1515] text-white font-semibold py-2.5 rounded-lg transition-colors">
+                  <button onClick={handleSubmit} className="text-sm w-full bg-[#7A1C1C] hover:bg-[#5a1515] text-white font-semibold py-2.5 rounded-lg transition-colors">
                     {action === "Sign In" ? "Sign In" : "Create Account"}
                   </button>
                 

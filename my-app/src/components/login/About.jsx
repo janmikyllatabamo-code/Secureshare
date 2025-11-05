@@ -20,7 +20,7 @@ export const About = () => {
       </div>
 
       {/* Our Team Section */}
-      <div className="bg-[#B84545] py-16 px-4">
+      <div className="bg-[#7A1C1C] py-16 px-4">
         <div className="max-w-6xl mx-auto">
           <h2 className="text-3xl md:text-4xl font-black text-white text-center mb-12">
             Our Team

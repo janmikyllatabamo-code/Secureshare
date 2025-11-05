@@ -17,25 +17,25 @@ export const Sidebar = ({ collapsed }) => {
             </NavLink>
           </li>
           <li>
-            <NavLink to="/files" className={({isActive})=>`flex items-center gap-3 px-4 py-3 hover:bg-white/10 ${isActive? 'bg-white/10' : ''}`}>
+            <NavLink to="files" className={({isActive})=>`flex items-center gap-3 px-4 py-3 hover:bg-white/10 ${isActive? 'bg-white/10' : ''}`}>
               <Folder className="w-5 h-5" />
               <span className={`${labelClass} text-sm font-medium`}>Files</span>
             </NavLink>
           </li>
           <li>
-            <NavLink to="/shared" className={({isActive})=>`flex items-center gap-3 px-4 py-3 hover:bg-white/10 ${isActive? 'bg-white/10' : ''}`}>
+            <NavLink to="shared" className={({isActive})=>`flex items-center gap-3 px-4 py-3 hover:bg-white/10 ${isActive? 'bg-white/10' : ''}`}>
               <Share2 className="w-5 h-5" />
               <span className={`${labelClass} text-sm font-medium`}>Shared</span>
             </NavLink>
           </li>
           <li>
-            <NavLink to="/trash" className={({isActive})=>`flex items-center gap-3 px-4 py-3 hover:bg-white/10 ${isActive? 'bg-white/10' : ''}`}>
+            <NavLink to="trash" className={({isActive})=>`flex items-center gap-3 px-4 py-3 hover:bg-white/10 ${isActive? 'bg-white/10' : ''}`}>
               <Trash2 className="w-5 h-5" />
               <span className={`${labelClass} text-sm font-medium`}>Trash</span>
             </NavLink>
           </li>
           <li>
-            <NavLink to="/settings" className={({isActive})=>`flex items-center gap-3 px-4 py-3 hover:bg-white/10 ${isActive? 'bg-white/10' : ''}`}>
+            <NavLink to="settings" className={({isActive})=>`flex items-center gap-3 px-4 py-3 hover:bg-white/10 ${isActive? 'bg-white/10' : ''}`}>
               <Settings className="w-5 h-5" />
               <span className={`${labelClass} text-sm font-medium`}>Settings</span>
             </NavLink>
