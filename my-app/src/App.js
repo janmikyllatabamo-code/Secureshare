@@ -134,6 +134,7 @@ function App() {
           <Route path="manage-classes" element={<ManageClasses />} />
           <Route path="manage-classes/course/:courseId" element={<CourseDetailView />} />
           <Route path="files" element={<FilesPage />} />
+          <Route path="shared" element={<SharedPage />} />
           <Route path="settings" element={<SettingsPage />} />
         </Route>
 

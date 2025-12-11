@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { Upload, FolderPlus, FileText, Clock, Copy as CopyIcon, Scissors, ClipboardPaste, Move, Pencil, Trash2 } from 'lucide-react'
+import { FilePreviewModal } from '../portal/FilePreviewModal'
 import { FileUpload } from '../portal/FileUpload'
 import { CreateFolderModal } from '../portal/CreateFolderModal'
 
@@ -10,17 +12,37 @@ export const FilesPage = () => {
   const [typeFilter, setTypeFilter] = useState('all')
   const [sortBy, setSortBy] = useState('name-asc')
   const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, targetFile: null })
-  const [clipboard, setClipboard] = useState({ file: null, mode: null }) // mode: 'copy' | 'cut'
+  const [clipboard, setClipboard] = useState({ file: null, mode: null })
+  const [previewFile, setPreviewFile] = useState(null)
   const menuRef = useRef(null)
+  const initializedRef = useRef(false)
+  const [files, setFiles] = useState([])
+  const [userKey, setUserKey] = useState('Student')
+  const filesKey = `files:list:${userKey}`
+  const trashKey = `files:trash:${userKey}`
+  const [currentPath, setCurrentPath] = useState('')
+  const location = useLocation()
 
-  const [files] = useState([
-    { id: 1, name: 'Project Proposal', ext: 'pdf', sizeMB: 2.0, updatedAt: new Date(2025, 10, 4) },
-    { id: 2, name: 'Team Roster', ext: 'docx', sizeMB: 0.3, updatedAt: new Date(2025, 9, 28) },
-    { id: 3, name: 'Meeting Notes', ext: 'txt', sizeMB: 0.1, updatedAt: new Date(2025, 10, 5) },
-    { id: 4, name: 'Wireframe', ext: 'png', sizeMB: 3.4, updatedAt: new Date(2025, 9, 20) },
-    { id: 5, name: 'Budget Sheet', ext: 'xlsx', sizeMB: 1.2, updatedAt: new Date(2025, 9, 30) },
-    { id: 6, name: 'Sample Document', ext: 'pdf', sizeMB: 2.0, updatedAt: new Date(2025, 10, 3) },
-  ])
+  useEffect(() => {
+    const authUserRaw = localStorage.getItem('authUser')
+    const authUser = authUserRaw ? JSON.parse(authUserRaw) : { role: 'Student', email: '' }
+    const key = authUser.role === 'Teacher' ? 'Teacher' : (authUser.email || 'Student')
+    setUserKey(key)
+  }, [])
+
+  useEffect(() => {
+    const stored = localStorage.getItem(filesKey)
+    const parsed = stored ? JSON.parse(stored) : []
+    const normalized = parsed.map(f => ({ ...f, updatedAt: new Date(f.updatedAt), parentPath: f.parentPath || '' }))
+    setFiles(normalized)
+    initializedRef.current = true
+  }, [filesKey])
+
+  useEffect(() => {
+    if (!initializedRef.current) return
+    const toStore = files.map(f => ({ ...f, updatedAt: f.updatedAt instanceof Date ? f.updatedAt.toISOString() : f.updatedAt }))
+    localStorage.setItem(filesKey, JSON.stringify(toStore))
+  }, [files, filesKey])
 
   const formatRelative = (date) => {
     const now = new Date()
@@ -38,11 +60,12 @@ export const FilesPage = () => {
   const filteredSortedFiles = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
     let result = files.filter((f) => {
+      const inFolder = (f.parentPath || '') === currentPath
       const matchesQuery = q
         ? `${f.name}.${f.ext}`.toLowerCase().includes(q)
         : true
       const matchesType = typeFilter === 'all' ? true : f.ext === typeFilter
-      return matchesQuery && matchesType
+      return inFolder && matchesQuery && matchesType
     })
 
     switch (sortBy) {
@@ -68,7 +91,13 @@ export const FilesPage = () => {
         break
     }
     return result
-  }, [files, searchQuery, typeFilter, sortBy])
+  }, [files, searchQuery, typeFilter, sortBy, currentPath])
+
+  useEffect(() => {
+    const qs = new URLSearchParams(location.search)
+    const q = qs.get('q') || ''
+    setSearchQuery(q)
+  }, [location.search])
 
   useEffect(() => {
     const onKeyDown = (e) => {
@@ -99,26 +128,86 @@ export const FilesPage = () => {
     setContextMenu({ visible: true, x: e.clientX, y: e.clientY, targetFile: file })
   }
 
+  const incrementDownloads = () => {
+    const key = userKey || 'Student'
+    const dKey = `downloads:count:${key}`
+    const n = Number(localStorage.getItem(dKey) || '0') + 1
+    localStorage.setItem(dKey, String(n))
+  }
+
+  const notify = (title, message) => {
+    const notifKey = userKey ? `notifications:${userKey}` : 'notifications:Student'
+    const nStored = localStorage.getItem(notifKey)
+    const nList = nStored ? JSON.parse(nStored) : []
+    const notif = { title, message, time: 'just now', read: false }
+    localStorage.setItem(notifKey, JSON.stringify([notif, ...nList]))
+  }
+
+  const previewFileNow = (file) => {
+    if (file.ext === 'folder') return
+    setPreviewFile({ name: `${file.name}.${file.ext}`, url: file.url, ext: file.ext })
+  }
+
   // Placeholder action handlers (frontend-only)
   const handleCopy = () => {
     setClipboard({ file: contextMenu.targetFile, mode: 'copy' })
     setContextMenu((s) => ({ ...s, visible: false }))
+    window.dispatchEvent(new Event('app:files:updated'))
+    if (contextMenu.targetFile) notify('Copied', `${contextMenu.targetFile.name}.${contextMenu.targetFile.ext} copied`)
   }
   const handleCut = () => {
     setClipboard({ file: contextMenu.targetFile, mode: 'cut' })
     setContextMenu((s) => ({ ...s, visible: false }))
+    window.dispatchEvent(new Event('app:files:updated'))
+    if (contextMenu.targetFile) notify('Cut', `${contextMenu.targetFile.name}.${contextMenu.targetFile.ext} cut`)
   }
   const handlePaste = () => {
-    // No backend; just hide menu. In real implementation, call API then refresh.
+    if (!clipboard.file) return
+    const src = clipboard.file
+    const now = new Date()
+    if (clipboard.mode === 'copy') {
+      const newItem = { id: Date.now(), name: `${src.name} (copy)`, ext: src.ext, sizeMB: src.sizeMB, updatedAt: now }
+      setFiles(prev => [newItem, ...prev])
+    }
+    if (clipboard.mode === 'cut') {
+      const newItem = { id: Date.now(), name: src.name, ext: src.ext, sizeMB: src.sizeMB, updatedAt: now }
+      setFiles(prev => [newItem, ...prev.filter(f => f.id !== src.id)])
+      setClipboard({ file: null, mode: null })
+    }
     setContextMenu((s) => ({ ...s, visible: false }))
+    window.dispatchEvent(new Event('app:files:updated'))
+    notify('Pasted', `${src.name}.${src.ext} pasted`)
   }
   const handleMove = () => {
+    setClipboard({ file: contextMenu.targetFile, mode: 'cut' })
     setContextMenu((s) => ({ ...s, visible: false }))
+    window.dispatchEvent(new Event('app:files:updated'))
+    if (contextMenu.targetFile) notify('Move', `${contextMenu.targetFile.name}.${contextMenu.targetFile.ext} marked to move`)
   }
   const handleRename = () => {
+    const f = contextMenu.targetFile
+    const newName = window.prompt('Rename file', f.name)
+    if (newName && newName.trim()) {
+      setFiles(prev => prev.map(it => it.id === f.id ? { ...it, name: newName.trim(), updatedAt: new Date() } : it))
+    }
     setContextMenu((s) => ({ ...s, visible: false }))
+    window.dispatchEvent(new Event('app:files:updated'))
+    if (newName && newName.trim()) notify('Renamed', `${f.name}.${f.ext} → ${newName.trim()}.${f.ext}`)
   }
   const handleDelete = () => {
+    const f = contextMenu.targetFile
+    const trashed = localStorage.getItem(trashKey)
+    const list = trashed ? JSON.parse(trashed) : []
+    const entry = { id: f.id, name: f.name, ext: `.${f.ext}`, size: `${f.sizeMB.toFixed(1)} MB`, when: 'just now', deletedAt: new Date().toISOString(), path: f.path || '', bucket: f.bucket || 'files' }
+    const newFiles = files.filter(it => it.id !== f.id)
+    setFiles(newFiles)
+    localStorage.setItem(trashKey, JSON.stringify([entry, ...list]))
+    const notifKey = userKey ? `notifications:${userKey}` : 'notifications:Student'
+    const nStored = localStorage.getItem(notifKey)
+    const nList = nStored ? JSON.parse(nStored) : []
+    const notif = { title: 'Moved to Trash', message: `${f.name}.${f.ext} moved to Trash`, time: 'just now', read: false }
+    localStorage.setItem(notifKey, JSON.stringify([notif, ...nList]))
+    window.dispatchEvent(new Event('app:files:updated'))
     setContextMenu((s) => ({ ...s, visible: false }))
   }
 
@@ -137,6 +226,18 @@ export const FilesPage = () => {
               <span>Upload</span>
             </button>
           </div>
+        </div>
+        <div className='flex items-center gap-2 text-sm text-slate-600 mb-2'>
+          <span>Path:</span>
+          {currentPath ? (
+            <>
+              <button onClick={() => setCurrentPath('')} className='text-[#7A1C1C] font-semibold'>Root</button>
+              <span>/</span>
+              <span>{currentPath}</span>
+            </>
+          ) : (
+            <span className='font-semibold'>Root</span>
+          )}
         </div>
         <p className='text-slate-600'>Manage and organize your files.</p>
 
@@ -192,7 +293,7 @@ export const FilesPage = () => {
           <div className='overflow-y-auto'>
             <ul className='divide-y divide-slate-100'>
               {filteredSortedFiles.map((file) => (
-                <li key={file.id} onContextMenu={(e) => onContextMenuFile(e, file)} className='px-6 py-4 hover:bg-slate-50 transition-colors duration-150 cursor-pointer group'>
+                <li key={file.id} onContextMenu={(e) => onContextMenuFile(e, file)} onClick={() => { if (file.ext === 'folder') { setCurrentPath(file.fullPath || `${currentPath ? currentPath + '/' : ''}${file.name}-${file.id}`) } else { previewFileNow(file) } }} className='px-6 py-4 hover:bg-slate-50 transition-colors duration-150 cursor-pointer group'>
                   <div className='flex items-start justify-between'>
                     <div className='flex items-start gap-3 flex-1'>
                       <div className='p-2 bg-red-50 rounded-lg group-hover:bg-red-100 transition-colors mt-1'>
@@ -221,10 +322,22 @@ export const FilesPage = () => {
       </section>
 
       {showUploadModal && (
-        <FileUpload onClose={() => setShowUploadModal(false)} />
+        <FileUpload onClose={() => setShowUploadModal(false)} folderPath={currentPath} />
       )}
       {showCreateFolderModal && (
-        <CreateFolderModal onClose={() => setShowCreateFolderModal(false)} onCreate={() => {}} />
+        <CreateFolderModal onClose={() => setShowCreateFolderModal(false)} onCreate={(folderName) => {
+          const now = new Date()
+          const id = Date.now()
+          const fullPath = `${currentPath ? currentPath + '/' : ''}${folderName}-${id}`
+          const newFolder = { id, name: folderName, ext: 'folder', sizeMB: 0, updatedAt: now, fullPath, parentPath: currentPath }
+          setFiles(prev => [newFolder, ...prev])
+          const notifKey = userKey ? `notifications:${userKey}` : 'notifications:Student'
+          const nStored = localStorage.getItem(notifKey)
+          const nList = nStored ? JSON.parse(nStored) : []
+          const notif = { title: 'Folder created', message: `${folderName} created`, time: 'just now', read: false }
+          localStorage.setItem(notifKey, JSON.stringify([notif, ...nList]))
+          window.dispatchEvent(new Event('app:files:updated'))
+        }} />
       )}
 
       {contextMenu.visible && (
@@ -275,6 +388,10 @@ export const FilesPage = () => {
             </ul>
           </div>
         </div>
+      )}
+
+      {previewFile && (
+        <FilePreviewModal file={previewFile} onClose={() => setPreviewFile(null)} />
       )}
     </div>
   )

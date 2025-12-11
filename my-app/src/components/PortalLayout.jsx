@@ -4,7 +4,7 @@ import { PortalNavbar } from './portal/PortalNavbar'
 import { Sidebar } from './Sidebar'
 
 export const PortalLayout = () => {
-  const [collapsed, setCollapsed] = useState(false)
+  const [collapsed, setCollapsed] = useState(true)
 
   return (
     <div className="min-h-screen bg-slate-50">

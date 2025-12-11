@@ -1,45 +1,95 @@
 // ============= NEW FILE: File Upload Component with Drag & Drop =============
-import React, { useState, useCallback } from 'react';
+import React, { useState } from 'react';
 import { Upload, X, FileText, CheckCircle } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
 
-export const FileUpload = ({ onClose }) => {
+export const FileUpload = ({ onClose, folderPath = '' }) => {
   // State to track uploaded files and their progress
   const [files, setFiles] = useState([]);
   const [isDragging, setIsDragging] = useState(false);
 
   // Handle file selection (both click and drag-and-drop)
-  const handleFiles = useCallback((selectedFiles) => {
+  const handleFiles = (selectedFiles) => {
     const fileArray = Array.from(selectedFiles);
     const newFiles = fileArray.map((file) => ({
       file,
       name: file.name,
-      size: (file.size / (1024 * 1024)).toFixed(2), // Convert to MB
+      size: (file.size / (1024 * 1024)).toFixed(2),
       progress: 0,
-      status: 'uploading', // uploading, complete, error
+      status: 'uploading',
     }));
 
-    setFiles((prev) => [...prev, ...newFiles]);
-
-    // Simulate upload progress for each file
-    newFiles.forEach((fileObj, index) => {
-      simulateUpload(files.length + index);
+    setFiles((prev) => {
+      const startIndex = prev.length;
+      const next = [...prev, ...newFiles];
+      newFiles.forEach((fileObj, index) => {
+        const absoluteIndex = startIndex + index;
+        simulateUpload(absoluteIndex);
+        uploadFileToSupabase(fileObj, absoluteIndex);
+      });
+      return next;
     });
-  }, [files.length]);
+  };
 
   // Simulate file upload with progress bar
   const simulateUpload = (fileIndex) => {
     const interval = setInterval(() => {
       setFiles((prevFiles) => {
         const updatedFiles = [...prevFiles];
-        if (updatedFiles[fileIndex].progress < 100) {
+        if (!updatedFiles[fileIndex]) {
+          clearInterval(interval);
+          return prevFiles;
+        }
+        if (updatedFiles[fileIndex].status === 'complete' || updatedFiles[fileIndex].status === 'error') {
+          clearInterval(interval);
+          return updatedFiles;
+        }
+        if (updatedFiles[fileIndex].progress < 95) {
           updatedFiles[fileIndex].progress += 10;
         } else {
-          updatedFiles[fileIndex].status = 'complete';
-          clearInterval(interval);
+          updatedFiles[fileIndex].progress = 95;
         }
         return updatedFiles;
       });
     }, 200);
+  };
+
+  const uploadFileToSupabase = async (fileObj, fileIndex) => {
+    const authUserRaw = localStorage.getItem('authUser');
+    const authUser = authUserRaw ? JSON.parse(authUserRaw) : null;
+    const userId = authUser?.id || 'guest';
+    const safeName = fileObj.name.replace(/[^\w\-.]+/g, '_');
+    const prefix = folderPath ? `${folderPath}/` : '';
+    const path = `${userId}/${prefix}${Date.now()}_${safeName}`;
+    const bucket = 'files';
+
+    const { error } = await supabase.storage
+      .from(bucket)
+      .upload(path, fileObj.file, { upsert: true, contentType: fileObj.file.type || 'application/octet-stream' });
+
+    if (error) {
+      setFiles((prevFiles) => {
+        const updatedFiles = [...prevFiles];
+        if (updatedFiles[fileIndex]) {
+          updatedFiles[fileIndex].status = 'error';
+        }
+        return updatedFiles;
+      });
+      return;
+    }
+
+    const { data: publicData } = supabase.storage.from(bucket).getPublicUrl(path);
+    setFiles((prevFiles) => {
+      const updatedFiles = [...prevFiles];
+      if (updatedFiles[fileIndex]) {
+        updatedFiles[fileIndex].progress = 100;
+        updatedFiles[fileIndex].status = 'complete';
+        updatedFiles[fileIndex].path = path;
+        updatedFiles[fileIndex].url = publicData?.publicUrl || '';
+        updatedFiles[fileIndex].bucket = bucket;
+      }
+      return updatedFiles;
+    });
   };
 
   // Handle drag events
@@ -211,7 +261,34 @@ export const FileUpload = ({ onClose }) => {
             Cancel
           </button>
           <button
-            onClick={onClose}
+            onClick={() => {
+              if (files.length > 0) {
+                const authUserRaw = localStorage.getItem('authUser');
+                const authUser = authUserRaw ? JSON.parse(authUserRaw) : { role: 'Student', email: '' };
+                const filesKey = authUser.role === 'Teacher' ? 'files:list:Teacher' : (authUser.email ? `files:list:${authUser.email}` : 'files:list:Student');
+                const stored = localStorage.getItem(filesKey);
+                const list = stored ? JSON.parse(stored) : [];
+                const additions = files.filter(f => f.status === 'complete').map(f => ({
+                  id: Date.now() + Math.random(),
+                  name: f.name.replace(/\.[^/.]+$/, ''),
+                  ext: (f.name.split('.').pop() || '').toLowerCase(),
+                  sizeMB: parseFloat(f.size),
+                  updatedAt: new Date().toISOString(),
+                  path: f.path || '',
+                  url: f.url || '',
+                  bucket: f.bucket || 'files',
+                  parentPath: folderPath || ''
+                }));
+                localStorage.setItem(filesKey, JSON.stringify([...additions, ...list]));
+                window.dispatchEvent(new Event('app:files:updated'))
+                const key = authUser.role === 'Teacher' ? 'notifications:Teacher' : (authUser.email ? `notifications:${authUser.email}` : 'notifications:Student');
+                const nStored = localStorage.getItem(key);
+                const nList = nStored ? JSON.parse(nStored) : [];
+                const notif = { title: 'File uploaded', message: `${additions.length} file(s) uploaded`, time: 'just now', read: false };
+                localStorage.setItem(key, JSON.stringify([notif, ...nList]));
+              }
+              onClose();
+            }}
             className="px-6 py-2 bg-[#7A1C1C] text-white rounded-md hover:bg-[#5a1515] transition-colors"
             disabled={files.length === 0}
           >

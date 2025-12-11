@@ -3,7 +3,7 @@ import { Home, BookOpen, FileText, Settings, Folder } from 'lucide-react'
 import { NavLink, useLocation } from 'react-router-dom'
 
 export const TeacherSidebar = ({ collapsed }) => {
-  const widthClass = collapsed ? 'w-16' : 'w-60'
+  const widthClass = collapsed ? 'md:w-16' : 'md:w-60'
   const labelClass = collapsed ? 'hidden' : 'block'
   const location = useLocation()
   
@@ -11,39 +11,91 @@ export const TeacherSidebar = ({ collapsed }) => {
   const isManageClassesActive = location.pathname.includes('/manage-classes')
 
   return (
-    <aside className={`h-[calc(100vh-64px)] bg-[#7A1C1C] text-white ${widthClass} transition-all duration-300 sticky top-16`}> 
-      <nav className="py-4">
-        <ul className="space-y-1">
-          <li>
-            <NavLink to="/teacher-dashboard" end className={({isActive})=>`flex items-center gap-3 px-4 py-3 hover:bg-white/10 ${isActive? 'bg-white/10' : ''}`}>
-              <Home className="w-5 h-5" />
-              <span className={`${labelClass} text-sm font-medium`}>Dashboard</span>
-            </NavLink>
-          </li>
-          <li>
-            <NavLink 
-              to="manage-classes" 
-              className={`flex items-center gap-3 px-4 py-3 hover:bg-white/10 ${isManageClassesActive ? 'bg-white/10' : ''}`}
-            >
-              <BookOpen className="w-5 h-5" />
-              <span className={`${labelClass} text-sm font-medium`}>Manage Classes</span>
-            </NavLink>
-          </li>
-          <li>
-            <NavLink to="files" className={({isActive})=>`flex items-center gap-3 px-4 py-3 hover:bg-white/10 ${isActive? 'bg-white/10' : ''}`}>
-              <Folder className="w-5 h-5" />
-              <span className={`${labelClass} text-sm font-medium`}>Files</span>
-            </NavLink>
-          </li>
-          <li>
-            <NavLink to="settings" className={({isActive})=>`flex items-center gap-3 px-4 py-3 hover:bg-white/10 ${isActive? 'bg-white/10' : ''}`}>
-              <Settings className="w-5 h-5" />
-              <span className={`${labelClass} text-sm font-medium`}>Settings</span>
-            </NavLink>
-          </li>
-        </ul>
-      </nav>
-    </aside>
+    <>
+      {/* Mobile overlay drawer */}
+      {!collapsed && (
+        <aside className={`md:hidden fixed top-16 left-0 h-[calc(100vh-64px)] w-64 bg-[#7A1C1C] text-white z-40 shadow-xl`}> 
+          <nav className="py-4">
+            <ul className="space-y-1">
+              <li>
+                <NavLink to="/teacher-dashboard" end className={({isActive})=>`flex items-center gap-3 px-4 py-3 hover:bg-white/10 ${isActive? 'bg-white/10' : ''}`}>
+                  <Home className="w-5 h-5" />
+                  <span className={`text-sm font-medium`}>Dashboard</span>
+                </NavLink>
+              </li>
+              <li>
+                <NavLink 
+                  to="manage-classes" 
+                  className={`flex items-center gap-3 px-4 py-3 hover:bg-white/10 ${isManageClassesActive ? 'bg-white/10' : ''}`}
+                >
+                  <BookOpen className="w-5 h-5" />
+                  <span className={`text-sm font-medium`}>Manage Classes</span>
+                </NavLink>
+              </li>
+              <li>
+                <NavLink to="files" className={({isActive})=>`flex items-center gap-3 px-4 py-3 hover:bg-white/10 ${isActive? 'bg-white/10' : ''}`}>
+                  <Folder className="w-5 h-5" />
+                  <span className={`text-sm font-medium`}>Files</span>
+                </NavLink>
+              </li>
+              <li>
+                <NavLink to="shared" className={({isActive})=>`flex items-center gap-3 px-4 py-3 hover:bg-white/10 ${isActive? 'bg-white/10' : ''}`}>
+                  <FileText className="w-5 h-5" />
+                  <span className={`text-sm font-medium`}>Shared</span>
+                </NavLink>
+              </li>
+              <li>
+                <NavLink to="settings" className={({isActive})=>`flex items-center gap-3 px-4 py-3 hover:bg-white/10 ${isActive? 'bg-white/10' : ''}`}>
+                  <Settings className="w-5 h-5" />
+                  <span className={`text-sm font-medium`}>Settings</span>
+                </NavLink>
+              </li>
+            </ul>
+          </nav>
+        </aside>
+      )}
+
+      {/* Desktop sidebar */}
+      <aside className={`hidden md:block h-[calc(100vh-64px)] bg-[#7A1C1C] text-white ${widthClass} transition-all duration-300 sticky top-16`}> 
+        <nav className="py-4">
+          <ul className="space-y-1">
+            <li>
+              <NavLink to="/teacher-dashboard" end className={({isActive})=>`flex items-center gap-3 px-4 py-3 hover:bg-white/10 ${isActive? 'bg-white/10' : ''}`}>
+                <Home className="w-5 h-5" />
+                <span className={`${labelClass} text-sm font-medium`}>Dashboard</span>
+              </NavLink>
+            </li>
+            <li>
+              <NavLink 
+                to="manage-classes" 
+                className={`flex items-center gap-3 px-4 py-3 hover:bg-white/10 ${isManageClassesActive ? 'bg-white/10' : ''}`}
+              >
+                <BookOpen className="w-5 h-5" />
+                <span className={`${labelClass} text-sm font-medium`}>Manage Classes</span>
+              </NavLink>
+            </li>
+            <li>
+              <NavLink to="files" className={({isActive})=>`flex items-center gap-3 px-4 py-3 hover:bg-white/10 ${isActive? 'bg-white/10' : ''}`}>
+                <Folder className="w-5 h-5" />
+                <span className={`${labelClass} text-sm font-medium`}>Files</span>
+              </NavLink>
+            </li>
+            <li>
+              <NavLink to="shared" className={({isActive})=>`flex items-center gap-3 px-4 py-3 hover:bg-white/10 ${isActive? 'bg-white/10' : ''}`}>
+                <FileText className="w-5 h-5" />
+                <span className={`${labelClass} text-sm font-medium`}>Shared</span>
+              </NavLink>
+            </li>
+            <li>
+              <NavLink to="settings" className={({isActive})=>`flex items-center gap-3 px-4 py-3 hover:bg-white/10 ${isActive? 'bg-white/10' : ''}`}>
+                <Settings className="w-5 h-5" />
+                <span className={`${labelClass} text-sm font-medium`}>Settings</span>
+              </NavLink>
+            </li>
+          </ul>
+        </nav>
+      </aside>
+    </>
   )
 }
 

@@ -1,11 +1,60 @@
 import React from 'react'
 import { Trash2, FileText, Undo2, XCircle, Clock } from 'lucide-react'
+import { supabase } from '../../lib/supabase'
 
 export const TrashPage = () => {
-  const trashed = [
-    { id: 1, name: 'Old Notes', ext: '.pdf', size: '1.2 MB', when: '2 weeks ago' },
-    { id: 2, name: 'Draft Report', ext: '.docx', size: '824 KB', when: '1 month ago' }
-  ]
+  const [userKey, setUserKey] = React.useState('Student')
+  const trashKey = `files:trash:${userKey}`
+  const [trashed, setTrashed] = React.useState([])
+
+  const persist = (list) => {
+    localStorage.setItem(trashKey, JSON.stringify(list))
+    setTrashed(list)
+  }
+
+  const restore = (item) => {
+    const filesKey = `files:list:${userKey}`
+    const filesStored = localStorage.getItem(filesKey)
+    const files = filesStored ? JSON.parse(filesStored).map(f => ({ ...f, updatedAt: new Date(f.updatedAt) })) : []
+    const newFile = { id: Date.now(), name: item.name, ext: item.ext.replace('.', ''), sizeMB: parseFloat(item.size), updatedAt: new Date(), path: item.path || '', url: item.url || '', bucket: item.bucket || 'files' }
+    const updatedFiles = [newFile, ...files]
+    localStorage.setItem(filesKey, JSON.stringify(updatedFiles.map(f => ({ ...f, updatedAt: f.updatedAt.toISOString() }))))
+    const remaining = trashed.filter(t => t.id !== item.id)
+    persist(remaining)
+    const notifKey = userKey ? `notifications:${userKey}` : 'notifications:Student'
+    const nStored = localStorage.getItem(notifKey)
+    const nList = nStored ? JSON.parse(nStored) : []
+    const notif = { title: 'Restored', message: `${item.name}${item.ext} restored from Trash`, time: 'just now', read: false }
+    localStorage.setItem(notifKey, JSON.stringify([notif, ...nList]))
+    window.dispatchEvent(new Event('app:files:updated'))
+  }
+
+  const deleteForever = async (item) => {
+    if (item.path && item.bucket) {
+      await supabase.storage.from(item.bucket).remove([item.path])
+    }
+    const remaining = trashed.filter(t => t.id !== item.id)
+    persist(remaining)
+    const notifKey = userKey ? `notifications:${userKey}` : 'notifications:Student'
+    const nStored = localStorage.getItem(notifKey)
+    const nList = nStored ? JSON.parse(nStored) : []
+    const notif = { title: 'Deleted Permanently', message: `${item.name}${item.ext} deleted permanently`, time: 'just now', read: false }
+    localStorage.setItem(notifKey, JSON.stringify([notif, ...nList]))
+    window.dispatchEvent(new Event('app:files:updated'))
+  }
+
+  React.useEffect(() => {
+    const authUserRaw = localStorage.getItem('authUser')
+    const authUser = authUserRaw ? JSON.parse(authUserRaw) : { role: 'Student', email: '' }
+    const key = authUser.role === 'Teacher' ? 'Teacher' : (authUser.email || 'Student')
+    setUserKey(key)
+  }, [])
+
+  React.useEffect(() => {
+    const stored = localStorage.getItem(trashKey)
+    const list = stored ? JSON.parse(stored) : []
+    setTrashed(list)
+  }, [trashKey])
 
   return (
     <div className='container mx-auto bg-gradient-to-br from-slate-50 via-white to-slate-50 min-h-[calc(100vh-64px)] m-0 p-0'>
@@ -51,11 +100,11 @@ export const TrashPage = () => {
                         </div>
                       </div>
                       <div className='flex items-center gap-2'>
-                        <button className='inline-flex items-center gap-1 px-3 py-1.5 rounded-md border border-slate-200 text-slate-700 hover:border-slate-300'>
+                        <button onClick={() => restore(t)} className='inline-flex items-center gap-1 px-3 py-1.5 rounded-md border border-slate-200 text-slate-700 hover:border-slate-300'>
                           <Undo2 className='w-4 h-4' />
                           <span className='text-sm'>Restore</span>
                         </button>
-                        <button className='inline-flex items-center gap-1 px-3 py-1.5 rounded-md bg-red-600 text-white hover:opacity-95'>
+                        <button onClick={() => deleteForever(t)} className='inline-flex items-center gap-1 px-3 py-1.5 rounded-md bg-red-600 text-white hover:opacity-95'>
                           <XCircle className='w-4 h-4' />
                           <span className='text-sm'>Delete</span>
                         </button>

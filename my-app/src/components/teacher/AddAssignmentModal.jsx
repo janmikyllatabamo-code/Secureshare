@@ -38,13 +38,13 @@ export const AddAssignmentModal = ({ onClose, onSave }) => {
     // Combine due date and time
     const dueDateTime = `${dueDate} ${dueTime}`
 
-    // Prepare file data (mock file name/URL)
+    // Prepare file data for consumer; include raw file for upload
     const fileData = attachedFile ? {
       name: attachedFile.name,
       size: attachedFile.size,
       type: attachedFile.type,
-      // In production, this would be the actual file URL after upload
-      url: URL.createObjectURL(attachedFile) // Mock URL for demo purposes
+      url: URL.createObjectURL(attachedFile),
+      rawFile: attachedFile
     } : null
 
     // Call onSave with assignment data

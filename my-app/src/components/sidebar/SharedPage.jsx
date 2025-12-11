@@ -4,6 +4,8 @@ import { ShareAccessModal } from '../portal/ShareAccessModal'
 
 export const SharedPage = () => {
   const [showShareAccessModal, setShowShareAccessModal] = useState(false)
+  const [userKey, setUserKey] = useState('Student')
+  const [sharedItems, setSharedItems] = useState([])
 
   // Calculate days remaining until link expiry
   const calculateDaysRemaining = (expiryDate) => {
@@ -17,33 +19,24 @@ export const SharedPage = () => {
     return diffDays > 0 ? diffDays : 0
   }
 
-  // Mock shared items with expiry dates
-  const sharedItems = [
-    {
-      id: 1,
-      name: 'Group Presentation 1',
-      extension: '.pptx',
-      sharedBy: 'You',
-      sharedDate: '3 days ago',
-      expiryDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days from now
-    },
-    {
-      id: 2,
-      name: 'Group Presentation 2',
-      extension: '.pptx',
-      sharedBy: 'You',
-      sharedDate: '5 days ago',
-      expiryDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000) // 2 days from now
-    },
-    {
-      id: 3,
-      name: 'Group Presentation 3',
-      extension: '.pptx',
-      sharedBy: 'You',
-      sharedDate: '1 week ago',
-      expiryDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000) // 14 days from now
-    }
-  ]
+  const linkDays = () => {
+    const v = localStorage.getItem('settings:linkExpiryDays')
+    return v ? Number(v) : 7
+  }
+
+  React.useEffect(() => {
+    const authUserRaw = localStorage.getItem('authUser')
+    const authUser = authUserRaw ? JSON.parse(authUserRaw) : { role: 'Student', email: '' }
+    const key = authUser.role === 'Teacher' ? 'Teacher' : (authUser.email || 'Student')
+    setUserKey(key)
+  }, [])
+
+  React.useEffect(() => {
+    const sharedKey = `shared:list:${userKey}`
+    const stored = localStorage.getItem(sharedKey)
+    const list = stored ? JSON.parse(stored) : []
+    setSharedItems(list.map(it => ({ ...it, expiryDate: it.expiryDate ? new Date(it.expiryDate) : null })))
+  }, [userKey])
 
   return (
     <div className='container mx-auto bg-gradient-to-br from-slate-50 via-white to-slate-50 min-h-[calc(100vh-64px)] m-0 p-0'>
@@ -121,7 +114,40 @@ export const SharedPage = () => {
       </section>
 
       {showShareAccessModal && (
-        <ShareAccessModal onClose={() => setShowShareAccessModal(false)} onShare={() => {}} />
+        <ShareAccessModal onClose={() => setShowShareAccessModal(false)} onShare={({ emails, file, role }) => {
+          const days = linkDays()
+          const name = file ? file.name.split('.')[0] : 'Shared File'
+          const extension = file ? `.${file.name.split('.').pop()}` : ''
+          const item = {
+            id: Date.now(),
+            name,
+            extension,
+            sharedBy: 'You',
+            sharedDate: 'today',
+            recipients: emails,
+            role,
+            expiryDate: new Date(Date.now() + days * 24 * 60 * 60 * 1000)
+          }
+          const next = [item, ...sharedItems]
+          setSharedItems(next)
+          const sharedKey = `shared:list:${userKey}`
+          localStorage.setItem(sharedKey, JSON.stringify(next.map(it => ({ ...it, expiryDate: it.expiryDate?.toISOString() }))))
+
+          const ownerNotifKey = `notifications:${userKey}`
+          const ownerStored = localStorage.getItem(ownerNotifKey)
+          const ownerList = ownerStored ? JSON.parse(ownerStored) : []
+          const ownerNotif = { title: 'Access shared', message: `${name}${extension} shared with ${emails.length} recipient(s)`, time: 'just now', read: false }
+          localStorage.setItem(ownerNotifKey, JSON.stringify([ownerNotif, ...ownerList]))
+          window.dispatchEvent(new Event('app:shared:updated'))
+
+          emails.forEach((email) => {
+            const destKey = `notifications:${email}`
+            const dStored = localStorage.getItem(destKey)
+            const dList = dStored ? JSON.parse(dStored) : []
+            const notif = { title: 'New file shared', message: `${userKey} shared ${name}${extension} with you`, time: 'just now', read: false }
+            localStorage.setItem(destKey, JSON.stringify([notif, ...dList]))
+          })
+        }} />
       )}
     </div>
   )

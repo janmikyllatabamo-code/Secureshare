@@ -1,5 +1,6 @@
 // UPDATED: Added useState import for modal state management
 import React, { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 // ADDED: Import FileUpload component
 import { FileUpload } from './FileUpload'
 import { CreateFolderModal } from './CreateFolderModal'
@@ -14,6 +15,9 @@ export const Portal = () => {
   const [showShareAccessModal, setShowShareAccessModal] = useState(false);
   const [showSecuritySettingsModal, setShowSecuritySettingsModal] = useState(false);
   const [userName, setUserName] = useState('Student');
+  const [stats, setStats] = useState({ totalFiles: 0, uploaded: 0, downloaded: 0, sharedWith: 0 })
+  const [recentFiles, setRecentFiles] = useState([])
+  const navigate = useNavigate()
 
   useEffect(() => {
     // Get user name from localStorage
@@ -27,6 +31,61 @@ export const Portal = () => {
       }
     }
   }, []);
+
+  useEffect(() => {
+    const refresh = () => {
+      const authUserRaw = localStorage.getItem('authUser')
+      const authUser = authUserRaw ? JSON.parse(authUserRaw) : { role: 'Student', email: '' }
+      const key = authUser.role === 'Teacher' ? 'Teacher' : (authUser.email || 'Student')
+      const filesKey = `files:list:${key}`
+      const sharedKey = `shared:list:${key}`
+      const downloadsKey = `downloads:count:${key}`
+      const filesStored = localStorage.getItem(filesKey)
+      const sharedStored = localStorage.getItem(sharedKey)
+      const downloadsStored = localStorage.getItem(downloadsKey)
+      const filesList = filesStored ? JSON.parse(filesStored) : []
+      const sharedList = sharedStored ? JSON.parse(sharedStored) : []
+      const downloaded = downloadsStored ? Number(downloadsStored) : 0
+      setStats({ totalFiles: filesList.length, uploaded: filesList.length, downloaded, sharedWith: sharedList.length })
+      const parsed = filesList.map(f => ({ ...f, updatedAt: new Date(f.updatedAt) }))
+      parsed.sort((a, b) => (b.updatedAt) - (a.updatedAt))
+      setRecentFiles(parsed.slice(0, 8))
+    }
+    refresh()
+    const onFiles = () => refresh()
+    const onShared = () => refresh()
+    window.addEventListener('app:files:updated', onFiles)
+    window.addEventListener('app:shared:updated', onShared)
+    return () => {
+      window.removeEventListener('app:files:updated', onFiles)
+      window.removeEventListener('app:shared:updated', onShared)
+    }
+  }, [])
+
+  useEffect(() => {
+    const authUserRaw = localStorage.getItem('authUser')
+    const authUser = authUserRaw ? JSON.parse(authUserRaw) : { role: 'Student', email: '' }
+    const key = authUser.role === 'Teacher' ? 'Teacher' : (authUser.email || 'Student')
+    const filesKey = `files:list:${key}`
+    const stored = localStorage.getItem(filesKey)
+    const list = stored ? JSON.parse(stored) : []
+    const parsed = list.map(f => ({ ...f, updatedAt: new Date(f.updatedAt) }))
+    parsed.sort((a, b) => (b.updatedAt) - (a.updatedAt))
+    setRecentFiles(parsed.slice(0, 8))
+  }, [])
+
+  const formatRelative = (date) => {
+    const now = new Date()
+    const diffMs = now - date
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+    if (diffDays <= 0) return 'today'
+    if (diffDays === 1) return '1 day ago'
+    if (diffDays < 7) return `${diffDays} days ago`
+    const diffWeeks = Math.floor(diffDays / 7)
+    if (diffWeeks === 1) return '1 week ago'
+    if (diffWeeks < 5) return `${diffWeeks} weeks ago`
+    return date.toLocaleDateString()
+  }
 
   return (
     <header>
@@ -46,45 +105,45 @@ export const Portal = () => {
         {/* Stats Cards */}
         <div className='px-6 lg:px-12 mb-8'>
           <ul className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5'>
-            <li className='bg-white hover:bg-gradient-to-br hover:from-white hover:to-slate-50 w-full px-6 py-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-lg transition-all duration-300 cursor-default group'>
+            <li onClick={() => navigate('/portal/files')} className='bg-white hover:bg-gradient-to-br hover:from-white hover:to-slate-50 w-full px-6 py-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-lg transition-all duration-300 cursor-pointer group'>
               <div className='flex items-center justify-between mb-3'>
                 <p className='font-semibold text-slate-600 text-sm uppercase tracking-wide'>Total Files</p>
                 <FileText className='w-5 h-5 text-slate-400 group-hover:text-[#7A1C1C] transition-colors' />
               </div>
-              <span className='text-4xl text-[#7A1C1C] font-bold block mb-1'>24</span>
+              <span className='text-4xl text-[#7A1C1C] font-bold block mb-1'>{stats.totalFiles}</span>
               <p className='text-xs text-slate-500 flex items-center gap-1'>
                 <TrendingUp className='w-3 h-3 text-green-600' />
                 <span className='text-green-600 font-medium'>+3 this week</span>
               </p>
             </li>
-            <li className='bg-white hover:bg-gradient-to-br hover:from-white hover:to-slate-50 w-full px-6 py-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-lg transition-all duration-300 cursor-default group'>
+            <li onClick={() => navigate('/portal/files')} className='bg-white hover:bg-gradient-to-br hover:from-white hover:to-slate-50 w-full px-6 py-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-lg transition-all duration-300 cursor-pointer group'>
               <div className='flex items-center justify-between mb-3'>
                 <p className='font-semibold text-slate-600 text-sm uppercase tracking-wide'>Uploaded</p>
                 <Upload className='w-5 h-5 text-slate-400 group-hover:text-[#7A1C1C] transition-colors' />
               </div>
-              <span className='text-4xl text-[#7A1C1C] font-bold block mb-1'>24</span>
+              <span className='text-4xl text-[#7A1C1C] font-bold block mb-1'>{stats.uploaded}</span>
               <p className='text-xs text-slate-500 flex items-center gap-1'>
                 <TrendingUp className='w-3 h-3 text-green-600' />
                 <span className='text-green-600 font-medium'>+3 this week</span>
               </p>
             </li>
-            <li className='bg-white hover:bg-gradient-to-br hover:from-white hover:to-slate-50 w-full px-6 py-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-lg transition-all duration-300 cursor-default group'>
+            <li onClick={() => navigate('/portal/files')} className='bg-white hover:bg-gradient-to-br hover:from-white hover:to-slate-50 w-full px-6 py-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-lg transition-all duration-300 cursor-pointer group'>
               <div className='flex items-center justify-between mb-3'>
                 <p className='font-semibold text-slate-600 text-sm uppercase tracking-wide'>Downloaded</p>
                 <Download className='w-5 h-5 text-slate-400 group-hover:text-[#7A1C1C] transition-colors' />
               </div>
-              <span className='text-4xl text-[#7A1C1C] font-bold block mb-1'>24</span>
+              <span className='text-4xl text-[#7A1C1C] font-bold block mb-1'>{stats.downloaded}</span>
               <p className='text-xs text-slate-500 flex items-center gap-1'>
                 <TrendingUp className='w-3 h-3 text-green-600' />
                 <span className='text-green-600 font-medium'>+3 this week</span>
               </p>
             </li>
-            <li className='bg-white hover:bg-gradient-to-br hover:from-white hover:to-slate-50 w-full px-6 py-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-lg transition-all duration-300 cursor-default group'>
+            <li onClick={() => navigate('/portal/shared')} className='bg-white hover:bg-gradient-to-br hover:from-white hover:to-slate-50 w-full px-6 py-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-lg transition-all duration-300 cursor-pointer group'>
               <div className='flex items-center justify-between mb-3'>
                 <p className='font-semibold text-slate-600 text-sm uppercase tracking-wide'>Shared With</p>
                 <Users className='w-5 h-5 text-slate-400 group-hover:text-[#7A1C1C] transition-colors' />
               </div>
-              <span className='text-4xl text-[#7A1C1C] font-bold block mb-1'>24</span>
+              <span className='text-4xl text-[#7A1C1C] font-bold block mb-1'>{stats.sharedWith}</span>
               <p className='text-xs text-slate-500 flex items-center gap-1'>
                 <TrendingUp className='w-3 h-3 text-green-600' />
                 <span className='text-green-600 font-medium'>+3 this week</span>
@@ -156,107 +215,33 @@ export const Portal = () => {
             </div>
             <div className='overflow-y-auto h-full max-h-[440px]'>
               <ul className='divide-y divide-slate-100'>
-                <li className='px-6 py-4 hover:bg-slate-50 transition-colors duration-150 cursor-pointer group'>
-                  <div className='flex items-start justify-between'>
-                    <div className='flex items-start gap-3 flex-1'>
-                      <div className='p-2 bg-red-50 rounded-lg group-hover:bg-red-100 transition-colors mt-1'>
-                        <FileText className='w-4 h-4 text-red-600' />
-                      </div>
-                      <div className='flex-1'>
-                        <p className='font-semibold text-slate-800 mb-1 group-hover:text-[#7A1C1C] transition-colors'>
-                          Computer Science Assignment<span className='text-slate-500 font-normal'>.pdf</span>
-                        </p>
-                        <p className='text-xs text-slate-500 flex items-center gap-3 flex-wrap'>
-                          <span className='flex items-center gap-1'>
-                            <span>2.4 MB</span>
-                          </span>
-                          <span>•</span>
-                          <span>Prof. Smith</span>
-                          <span>•</span>
-                          <span className='flex items-center gap-1'>
-                            <Clock className='w-3 h-3' />
-                            <span>2 hours ago</span>
-                          </span>
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </li>
-              
-                <li className='px-6 py-4 hover:bg-slate-50 transition-colors duration-150 cursor-pointer group'>
-                  <div className='flex items-start justify-between'>
-                    <div className='flex items-start gap-3 flex-1'>
-                      <div className='p-2 bg-red-50 rounded-lg group-hover:bg-red-100 transition-colors mt-1'>
-                        <FileText className='w-4 h-4 text-red-600' />
-                      </div>
-                      <div className='flex-1'>
-                        <p className='font-semibold text-slate-800 mb-1 group-hover:text-[#7A1C1C] transition-colors'>
-                          Data Structure Lecture Notes<span className='text-slate-500 font-normal'>.pdf</span>
-                        </p>
-                        <p className='text-xs text-slate-500 flex items-center gap-3 flex-wrap'>
-                          <span>1.8 MB</span>
-                          <span>•</span>
-                          <span>Prof. Johnson</span>
-                          <span>•</span>
-                          <span className='flex items-center gap-1'>
-                            <Clock className='w-3 h-3' />
-                            <span>5 hours ago</span>
-                          </span>
-                        </p>
+                {recentFiles.length === 0 && (
+                  <li className='px-6 py-8 text-center text-slate-400'>No files yet</li>
+                )}
+                {recentFiles.map((file) => (
+                  <li key={file.id} onClick={() => navigate(`/portal/files?q=${encodeURIComponent(`${file.name}.${file.ext}`)}`)} className='px-6 py-4 hover:bg-slate-50 transition-colors duration-150 cursor-pointer group'>
+                    <div className='flex items-start justify-between'>
+                      <div className='flex items-start gap-3 flex-1'>
+                        <div className='p-2 bg-red-50 rounded-lg group-hover:bg-red-100 transition-colors mt-1'>
+                          <FileText className='w-4 h-4 text-red-600' />
+                        </div>
+                        <div className='flex-1'>
+                          <p className='font-semibold text-slate-800 mb-1 group-hover:text-[#7A1C1C] transition-colors'>
+                            {file.name}<span className='text-slate-500 font-normal'>.{file.ext}</span>
+                          </p>
+                          <p className='text-xs text-slate-500 flex items-center gap-3 flex-wrap'>
+                            <span>{Number(file.sizeMB || 0).toFixed(1)} MB</span>
+                            <span>•</span>
+                            <span className='flex items-center gap-1'>
+                              <Clock className='w-3 h-3' />
+                              <span>{formatRelative(file.updatedAt)}</span>
+                            </span>
+                          </p>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </li>
-              
-                <li className='px-6 py-4 hover:bg-slate-50 transition-colors duration-150 cursor-pointer group'>
-                  <div className='flex items-start justify-between'>
-                    <div className='flex items-start gap-3 flex-1'>
-                      <div className='p-2 bg-blue-50 rounded-lg group-hover:bg-blue-100 transition-colors mt-1'>
-                        <FileText className='w-4 h-4 text-blue-600' />
-                      </div>
-                      <div className='flex-1'>
-                        <p className='font-semibold text-slate-800 mb-1 group-hover:text-[#7A1C1C] transition-colors'>
-                          Lab Report - Week 5<span className='text-slate-500 font-normal'>.docx</span>
-                        </p>
-                        <p className='text-xs text-slate-500 flex items-center gap-3 flex-wrap'>
-                          <span>824 KB</span>
-                          <span>•</span>
-                          <span>You</span>
-                          <span>•</span>
-                          <span className='flex items-center gap-1'>
-                            <Clock className='w-3 h-3' />
-                            <span>2 days ago</span>
-                          </span>
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </li>
-              
-                <li className='px-6 py-4 hover:bg-slate-50 transition-colors duration-150 cursor-pointer group'>
-                  <div className='flex items-start justify-between'>
-                    <div className='flex items-start gap-3 flex-1'>
-                      <div className='p-2 bg-green-50 rounded-lg group-hover:bg-green-100 transition-colors mt-1'>
-                        <FileText className='w-4 h-4 text-green-600' />
-                      </div>
-                      <div className='flex-1'>
-                        <p className='font-semibold text-slate-800 mb-1 group-hover:text-[#7A1C1C] transition-colors'>
-                          Research Data Analysis<span className='text-slate-500 font-normal'>.xlsx</span>
-                        </p>
-                        <p className='text-xs text-slate-500 flex items-center gap-3 flex-wrap'>
-                          <span>3.2 MB</span>
-                          <span>•</span>
-                          <span>Sara Duterte</span>
-                          <span>•</span>
-                          <span className='flex items-center gap-1'>
-                            <Clock className='w-3 h-3' />
-                            <span>3 days ago</span>
-                          </span>
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </li>
+                  </li>
+                ))}
               </ul>
             </div>
           </div>
@@ -284,13 +269,80 @@ export const Portal = () => {
         <FileUpload onClose={() => setShowUploadModal(false)} />
       )}
       {showCreateFolderModal && (
-        <CreateFolderModal onClose={() => setShowCreateFolderModal(false)} onCreate={() => {}} />
+        <CreateFolderModal onClose={() => setShowCreateFolderModal(false)} onCreate={(folderName) => {
+          const authUserRaw = localStorage.getItem('authUser')
+          const authUser = authUserRaw ? JSON.parse(authUserRaw) : { role: 'Student', email: '' }
+          const key = authUser.role === 'Teacher' ? 'Teacher' : (authUser.email || 'Student')
+          const filesKey = `files:list:${key}`
+          const stored = localStorage.getItem(filesKey)
+          const list = stored ? JSON.parse(stored) : []
+          const now = new Date().toISOString()
+          const id = Date.now()
+          const fullPath = `${folderName}-${id}`
+          const newFolder = { id, name: folderName, ext: 'folder', sizeMB: 0, updatedAt: now, fullPath, parentPath: '' }
+          localStorage.setItem(filesKey, JSON.stringify([newFolder, ...list]))
+          const notifKey = key ? `notifications:${key}` : 'notifications:Student'
+          const nStored = localStorage.getItem(notifKey)
+          const nList = nStored ? JSON.parse(nStored) : []
+          const notif = { title: 'Folder created', message: `${folderName} created`, time: 'just now', read: false }
+          localStorage.setItem(notifKey, JSON.stringify([notif, ...nList]))
+          window.dispatchEvent(new Event('app:files:updated'))
+          window.location.href = '/portal/files'
+        }} />
       )}
       {showShareAccessModal && (
-        <ShareAccessModal onClose={() => setShowShareAccessModal(false)} onShare={() => {}} />
+        <ShareAccessModal onClose={() => setShowShareAccessModal(false)} onShare={({ emails, role, file }) => {
+          const authUserRaw = localStorage.getItem('authUser')
+          const authUser = authUserRaw ? JSON.parse(authUserRaw) : { role: 'Student', email: '' }
+          const key = authUser.role === 'Teacher' ? 'Teacher' : (authUser.email || 'Student')
+          const sharedKey = `shared:list:${key}`
+          const stored = localStorage.getItem(sharedKey)
+          const list = stored ? JSON.parse(stored) : []
+          const days = Number(localStorage.getItem('settings:linkExpiryDays') || '7')
+          const now = new Date()
+          const expiry = new Date(now.getTime() + days * 24 * 60 * 60 * 1000)
+          const name = file.name.split('.')[0]
+          const extension = `.${file.name.split('.').pop()}`
+          const item = {
+            id: Date.now(),
+            name,
+            extension,
+            sharedBy: authUser.email || 'You',
+            sharedDate: 'today',
+            recipients: emails,
+            role,
+            expiryDate: expiry.toISOString()
+          }
+          localStorage.setItem(sharedKey, JSON.stringify([item, ...list]))
+          const ownerNotifKey = key ? `notifications:${key}` : 'notifications:Student'
+          const ownerStored = localStorage.getItem(ownerNotifKey)
+          const ownerList = ownerStored ? JSON.parse(ownerStored) : []
+          const ownerNotif = { title: 'Access shared', message: `${name}${extension} shared with ${emails.length} recipient(s)`, time: 'just now', read: false }
+          localStorage.setItem(ownerNotifKey, JSON.stringify([ownerNotif, ...ownerList]))
+          window.dispatchEvent(new Event('app:shared:updated'))
+          emails.forEach((email) => {
+            const destKey = `notifications:${email}`
+            const dStored = localStorage.getItem(destKey)
+            const dList = dStored ? JSON.parse(dStored) : []
+            const notif = { title: 'New file shared', message: `${authUser.email || 'User'} shared ${name}${extension} with you`, time: 'just now', read: false }
+            localStorage.setItem(destKey, JSON.stringify([notif, ...dList]))
+          })
+        }} />
       )}
       {showSecuritySettingsModal && (
-        <SecuritySettingsModal onClose={() => setShowSecuritySettingsModal(false)} onSave={() => {}} />
+        <SecuritySettingsModal onClose={() => setShowSecuritySettingsModal(false)} onSave={(settings) => {
+          localStorage.setItem('settings:twoFactor', JSON.stringify(!!settings.twoFactor))
+          localStorage.setItem('settings:linkExpiryDays', String(settings.linkExpiry || 7))
+          localStorage.setItem('settings:watermark', JSON.stringify(!!settings.watermark))
+          const authUserRaw = localStorage.getItem('authUser')
+          const authUser = authUserRaw ? JSON.parse(authUserRaw) : { role: 'Student', email: '' }
+          const key = authUser.role === 'Teacher' ? 'Teacher' : (authUser.email || 'Student')
+          const notifKey = `notifications:${key}`
+          const nStored = localStorage.getItem(notifKey)
+          const nList = nStored ? JSON.parse(nStored) : []
+          const notif = { title: 'Settings saved', message: 'Security settings updated', time: 'just now', read: false }
+          localStorage.setItem(notifKey, JSON.stringify([notif, ...nList]))
+        }} />
       )}
   </header>
   )
