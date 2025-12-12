@@ -1,5 +1,6 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { FileText, Users, CheckCircle, User, Award, ArrowLeft } from 'lucide-react'
+import { supabase } from '../../lib/supabase'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { GradingModal } from './GradingModal'
 
@@ -12,62 +13,77 @@ export const TeacherDashboard = () => {
   // Get courseId from location state or default to navigating to manage-classes
   const courseId = location.state?.courseId
 
-  // Mock data - in production, this would come from API
-  // This represents students enrolled in the selected course/assignment
-  const students = [
-    {
-      id: 'STU-2024-001',
-      name: 'John Doe',
+  const [students, setStudents] = useState([])
+  const [classes, setClasses] = useState([])
+  const [courseFilterKey, setCourseFilterKey] = useState(null)
+
+  useEffect(() => {
+    const stored = localStorage.getItem('submissions:list')
+    const list = stored ? JSON.parse(stored) : []
+    const mapped = list.map((sub) => ({
+      id: sub.studentId || 'STU-LOCAL',
+      name: sub.studentName || 'Student',
       submission: {
-        id: 1,
-        fileName: 'Assignment_1_Computer_Science.pdf',
-        fileSize: '2.4 MB',
-        submittedAt: '2024-01-15 10:30 AM',
-        course: 'CS101 - Introduction to Computer Science',
-        status: 'pending',
-        grade: null,
-        feedback: null
+        id: sub.id,
+        fileName: sub.fileName,
+        fileSize: sub.fileSize,
+        submittedAt: sub.submittedAt,
+        course: sub.course,
+        status: sub.status,
+        grade: sub.grade,
+        feedback: sub.feedback
       }
-    },
-    {
-      id: 'STU-2024-002',
-      name: 'Jane Smith',
-      submission: {
-        id: 2,
-        fileName: 'Lab_Report_Week_5.docx',
-        fileSize: '1.8 MB',
-        submittedAt: '2024-01-15 09:15 AM',
-        course: 'CS101 - Introduction to Computer Science',
-        status: 'graded',
-        grade: 'A',
-        feedback: 'Excellent work! Well-structured analysis.'
+    }))
+    setStudents(mapped)
+  }, [])
+
+  useEffect(() => {
+    const load = async () => {
+      let list = []
+      try {
+        const authUserRaw = localStorage.getItem('authUser')
+        const authUser = authUserRaw ? JSON.parse(authUserRaw) : { role: 'Teacher', email: '' }
+        const key = authUser.role === 'Teacher' ? 'Teacher' : (authUser.email || 'Student')
+
+        const { data, error } = await supabase
+          .from('courses')
+          .select('id,subject_code,subject_name,enrolled_students,schedule')
+        if (!error && Array.isArray(data)) {
+          list = data.map(c => ({
+            id: c.id,
+            subjectCode: c.subject_code,
+            subjectName: c.subject_name,
+            enrolledStudents: c.enrolled_students || 0,
+            schedule: c.schedule || ''
+          }))
+        }
+        if (list.length === 0) {
+          const storageKey = `classes:list:${key}`
+          const stored = localStorage.getItem(storageKey)
+          list = stored ? JSON.parse(stored) : []
+        }
+      } catch {
+        const storageKey = 'classes:list:Teacher'
+        const stored = localStorage.getItem(storageKey)
+        list = stored ? JSON.parse(stored) : []
       }
-    },
-    {
-      id: 'STU-2024-003',
-      name: 'Mike Johnson',
-      submission: {
-        id: 3,
-        fileName: 'Project_Proposal.pdf',
-        fileSize: '3.2 MB',
-        submittedAt: '2024-01-14 04:45 PM',
-        course: 'CS201 - Data Structures',
-        status: 'pending',
-        grade: null,
-        feedback: null
-      }
-    },
-    {
-      id: 'STU-2024-004',
-      name: 'Sarah Williams',
-      submission: null // No submission yet
-    },
-    {
-      id: 'STU-2024-005',
-      name: 'David Brown',
-      submission: null
+      setClasses(list)
     }
-  ]
+    load()
+  }, [])
+
+  useEffect(() => {
+    if (!courseId || classes.length === 0) {
+      setCourseFilterKey(null)
+      return
+    }
+    const found = classes.find(c => String(c.id) === String(courseId))
+    if (found) {
+      setCourseFilterKey(`${found.subjectCode} - ${found.subjectName}`)
+    } else {
+      setCourseFilterKey(null)
+    }
+  }, [classes, courseId])
 
   const handleStudentClick = (student) => {
     // Only allow clicking if student has a submission
@@ -79,14 +95,28 @@ export const TeacherDashboard = () => {
   }
 
   const handleSaveGrade = (gradeData) => {
-    // In production, this would make an API call to save the grade
-    // TODO: Replace with API call and toast notification
+    const stored = localStorage.getItem('submissions:list')
+    const list = stored ? JSON.parse(stored) : []
+    const updated = list.map((s) => s.id === gradeData.submissionId ? { ...s, grade: gradeData.grade, feedback: gradeData.feedback || '', status: 'graded', gradedAt: new Date().toISOString() } : s)
+    localStorage.setItem('submissions:list', JSON.stringify(updated))
+    const notifKey = gradeData.studentId ? `notifications:${gradeData.studentId}` : 'notifications:Student'
+    const nStored = localStorage.getItem(notifKey)
+    const nList = nStored ? JSON.parse(nStored) : []
+    const notif = { title: 'Grade received', message: `Your assignment has been graded: ${gradeData.grade}`, time: 'just now', read: false }
+    localStorage.setItem(notifKey, JSON.stringify([notif, ...nList]))
+    setStudents(prev => prev.map(st => st.submission && st.submission.id === gradeData.submissionId ? { ...st, submission: { ...st.submission, grade: gradeData.grade, feedback: gradeData.feedback || '', status: 'graded' } } : st))
     setShowGradingModal(false)
     setSelectedStudent(null)
   }
 
-  const pendingCount = students.filter(s => s.submission && s.submission.status === 'pending').length
-  const gradedCount = students.filter(s => s.submission && s.submission.status === 'graded').length
+  const filteredStudents = courseFilterKey 
+    ? students.filter(s => s.submission && s.submission.course === courseFilterKey)
+    : students
+  const pendingCount = filteredStudents.filter(s => s.submission && s.submission.status === 'pending').length
+  const gradedCount = filteredStudents.filter(s => s.submission && s.submission.status === 'graded').length
+  const totalStudentsAcrossClasses = classes.reduce((sum, c) => sum + (c.enrolledStudents || 0), 0)
+  const activeCourses = courseId ? 1 : classes.length
+  const currentCourse = courseId ? classes.find(c => String(c.id) === String(courseId)) : null
 
   const handleBack = () => {
     if (courseId) {
@@ -133,7 +163,7 @@ export const TeacherDashboard = () => {
               <p className='font-semibold text-slate-600 text-sm uppercase tracking-wide'>Total Students</p>
               <Users className='w-5 h-5 text-slate-400 group-hover:text-[#7A1C1C] transition-colors' />
             </div>
-            <span className='text-4xl text-[#7A1C1C] font-bold block mb-1'>{students.length}</span>
+            <span className='text-4xl text-[#7A1C1C] font-bold block mb-1'>{currentCourse ? currentCourse.enrolledStudents || 0 : totalStudentsAcrossClasses}</span>
             <p className='text-xs text-slate-500'>Across all classes</p>
           </li>
           <li className='bg-white hover:bg-gradient-to-br hover:from-white hover:to-slate-50 w-full px-6 py-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-lg transition-all duration-300 cursor-default group'>
@@ -141,7 +171,7 @@ export const TeacherDashboard = () => {
               <p className='font-semibold text-slate-600 text-sm uppercase tracking-wide'>Active Courses</p>
               <Award className='w-5 h-5 text-slate-400 group-hover:text-[#7A1C1C] transition-colors' />
             </div>
-            <span className='text-4xl text-[#7A1C1C] font-bold block mb-1'>5</span>
+            <span className='text-4xl text-[#7A1C1C] font-bold block mb-1'>{activeCourses}</span>
             <p className='text-xs text-slate-500'>Active</p>
           </li>
         </ul>
@@ -158,7 +188,7 @@ export const TeacherDashboard = () => {
           </div>
           <div className='overflow-y-auto max-h-[600px]'>
             <ul className='divide-y divide-slate-100'>
-              {students.map((student) => {
+              {filteredStudents.map((student) => {
                 const hasSubmission = !!student.submission
                 return (
                   <li 

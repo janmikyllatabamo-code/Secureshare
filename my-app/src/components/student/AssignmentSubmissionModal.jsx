@@ -1,11 +1,13 @@
 import React, { useState } from 'react'
-import { X, Upload, FileText, Download, Paperclip } from 'lucide-react'
+import { X, Upload, FileText, Download, Paperclip, Eye } from 'lucide-react'
+import { FilePreviewModal } from '../portal/FilePreviewModal'
 
 export const AssignmentSubmissionModal = ({ assignment, onClose, onSubmit }) => {
   const [selectedFile, setSelectedFile] = useState(null)
   const [submissionType, setSubmissionType] = useState('individual')
   const [groupMemberEmails, setGroupMemberEmails] = useState('')
   const [error, setError] = useState('')
+  const [previewFile, setPreviewFile] = useState(null)
   
   const isSubmitted = assignment?.status === 'submitted'
 
@@ -116,24 +118,11 @@ export const AssignmentSubmissionModal = ({ assignment, onClose, onSubmit }) => 
                       <p className='font-medium text-slate-700 mb-2 text-xs uppercase tracking-wide'>Instructional Material</p>
                       <div className='flex items-center gap-3'>
                         <button
-                          onClick={() => {
-                            // Mock download function - in production, this would download from server
-                            if (assignment.attachedFile.url && assignment.attachedFile.url !== '#') {
-                              const link = document.createElement('a')
-                              link.href = assignment.attachedFile.url
-                              link.download = assignment.attachedFile.name
-                              document.body.appendChild(link)
-                              link.click()
-                              document.body.removeChild(link)
-                            } else {
-                              // Fallback: simulate download
-                              alert(`Downloading: ${assignment.attachedFile.name}\n\nIn production, this would download the file from the server.`)
-                            }
-                          }}
+                          onClick={() => setPreviewFile({ name: assignment.attachedFile.name, url: assignment.attachedFile.url, ext: (assignment.attachedFile.name || '').split('.').pop() })}
                           className='flex items-center gap-2 px-4 py-2.5 bg-[#7A1C1C] hover:bg-[#5a1515] text-white font-medium rounded-lg transition-colors text-sm'
                         >
-                          <Download className='w-4 h-4' />
-                          <span>Download: {assignment.attachedFile.name}</span>
+                          <Eye className='w-4 h-4' />
+                          <span>Preview: {assignment.attachedFile.name}</span>
                         </button>
                         {assignment.attachedFile.size && (
                           <span className='text-xs text-slate-500'>
@@ -281,6 +270,10 @@ export const AssignmentSubmissionModal = ({ assignment, onClose, onSubmit }) => 
               Close
             </button>
           </div>
+        )}
+
+        {previewFile && (
+          <FilePreviewModal file={previewFile} onClose={() => setPreviewFile(null)} />
         )}
       </div>
     </div>

@@ -1,75 +1,146 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { ArrowLeft, BookOpen, Users, Calendar, Plus, FileText, Clock, CheckCircle } from 'lucide-react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { AddAssignmentModal } from './AddAssignmentModal'
+import { FilePreviewModal } from '../portal/FilePreviewModal'
+import { supabase } from '../../lib/supabase'
 
 export const CourseDetailView = () => {
   const navigate = useNavigate()
   const { courseId } = useParams()
   const [showAddAssignmentModal, setShowAddAssignmentModal] = useState(false)
   
-  // Mock data - in production, this would come from API based on courseId
-  const course = {
+  const [course, setCourse] = useState({
     id: courseId || '1',
-    subjectCode: 'CS101',
-    subjectName: 'Introduction to Computer Science',
-    enrolledStudents: 45,
-    schedule: 'Mon, Wed, Fri 9:00 AM - 10:30 AM',
-    description: 'An introductory course covering fundamental concepts of computer science including programming basics, data structures, and algorithms.'
-  }
+    subjectCode: 'Course',
+    subjectName: 'Course Details',
+    enrolledStudents: 0,
+    schedule: '',
+    description: ''
+  })
 
-  // Mock assignments data - using state to allow adding new assignments
-  const [assignments, setAssignments] = useState([
-    {
-      id: 1,
-      title: 'Assignment 1: Introduction to Programming',
-      dueDate: '2024-02-15',
-      submissions: 42,
-      totalStudents: 45,
-      status: 'active'
-    },
-    {
-      id: 2,
-      title: 'Lab Exercise 2: Data Types',
-      dueDate: '2024-02-20',
-      submissions: 38,
-      totalStudents: 45,
-      status: 'active'
-    },
-    {
-      id: 3,
-      title: 'Midterm Project',
-      dueDate: '2024-03-01',
-      submissions: 0,
-      totalStudents: 45,
-      status: 'upcoming'
+  useEffect(() => {
+    const authUserRaw = localStorage.getItem('authUser')
+    const authUser = authUserRaw ? JSON.parse(authUserRaw) : { role: 'Teacher', email: '' }
+    const key = authUser.role === 'Teacher' ? 'Teacher' : (authUser.email || 'Student')
+    const storageKey = `classes:list:${key}`
+    const stored = localStorage.getItem(storageKey)
+    const list = stored ? JSON.parse(stored) : []
+    const found = list.find(c => String(c.id) === String(courseId))
+    if (found) {
+      setCourse({
+        id: found.id,
+        subjectCode: found.subjectCode,
+        subjectName: found.subjectName,
+        enrolledStudents: found.enrolledStudents || 0,
+        schedule: found.schedule || '',
+        description: 'Course details and assignments.'
+      })
+    } else {
+      setCourse(prev => ({ ...prev, id: courseId || prev.id }))
     }
-  ])
+  }, [courseId])
+
+  const [assignments, setAssignments] = useState([])
+  const [previewFile, setPreviewFile] = useState(null)
+
+  useEffect(() => {
+    const load = async () => {
+      // Try Supabase table first
+      let list = []
+      try {
+        const { data, error } = await supabase
+          .from('assignments')
+          .select('id,title,description,due_date,due_time,max_points,material_url,material_name,status,submissions,total_students')
+          .eq('course_id', courseId)
+          .order('due_date', { ascending: true })
+        if (!error && Array.isArray(data)) {
+          list = data.map(a => ({
+            id: a.id,
+            title: a.title,
+            description: a.description || '',
+            dueDate: a.due_date || '',
+            dueTime: a.due_time || '',
+            maxPoints: a.max_points || 0,
+            status: a.status || 'active',
+            submissions: a.submissions || 0,
+            totalStudents: a.total_students || course.enrolledStudents,
+            attachedFile: a.material_url ? { name: a.material_name || 'Material', url: a.material_url } : null
+          }))
+        }
+      } catch {}
+
+      if (list.length === 0) {
+        const key = `assignments:list:${courseId}`
+        const stored = localStorage.getItem(key)
+        list = stored ? JSON.parse(stored) : []
+      }
+
+      setAssignments(list.map(a => ({ ...a, totalStudents: course.enrolledStudents })))
+    }
+    load()
+  }, [courseId, course.enrolledStudents])
 
   const handleAddAssignment = () => {
     setShowAddAssignmentModal(true)
   }
 
   const handleCreateAssignment = (assignmentData) => {
-    // Create new assignment object
-    const newAssignment = {
-      id: assignments.length > 0 ? Math.max(...assignments.map(a => a.id)) + 1 : 1,
-      title: assignmentData.title,
-      dueDate: assignmentData.dueDate,
-      submissions: 0,
-      totalStudents: course.enrolledStudents,
-      status: 'upcoming',
-      description: assignmentData.description || '',
-      maxPoints: assignmentData.maxPoints,
-      dueTime: assignmentData.dueTime,
-      attachedFile: assignmentData.attachedFile || null
-    }
+    const doSave = async () => {
+      let materialUrl = ''
+      let materialName = ''
+      if (assignmentData.attachedFile && assignmentData.attachedFile.rawFile) {
+        try {
+          const file = assignmentData.attachedFile.rawFile
+          const safeName = file.name.replace(/[^\w\-.]+/g, '_')
+          const path = `assignments/${courseId}/${Date.now()}_${safeName}`
+          const bucket = 'files'
+          const { error } = await supabase.storage.from(bucket).upload(path, file, { upsert: true, contentType: file.type || 'application/octet-stream' })
+          if (!error) {
+            const { data: publicData } = supabase.storage.from(bucket).getPublicUrl(path)
+            materialUrl = publicData?.publicUrl || ''
+            materialName = file.name
+          }
+        } catch {}
+      }
 
-    // Add to assignments list
-    setAssignments([...assignments, newAssignment])
-    
-    // In production, this would make an API call to save the assignment
-    // TODO: Replace with API call and toast notification
+      const newAssignment = {
+        id: Date.now(),
+        title: assignmentData.title,
+        dueDate: assignmentData.dueDate,
+        submissions: 0,
+        totalStudents: course.enrolledStudents,
+        status: 'active',
+        description: assignmentData.description || '',
+        maxPoints: assignmentData.maxPoints,
+        dueTime: assignmentData.dueTime,
+        attachedFile: materialUrl ? { name: materialName, url: materialUrl } : assignmentData.attachedFile || null
+      }
+
+      // Persist to Supabase table when available
+      try {
+        await supabase.from('assignments').insert([{
+          id: newAssignment.id,
+          course_id: courseId,
+          title: newAssignment.title,
+          description: newAssignment.description,
+          due_date: newAssignment.dueDate,
+          due_time: newAssignment.dueTime,
+          max_points: newAssignment.maxPoints,
+          material_url: newAssignment.attachedFile?.url || null,
+          material_name: newAssignment.attachedFile?.name || null,
+          status: newAssignment.status,
+          submissions: newAssignment.submissions,
+          total_students: newAssignment.totalStudents
+        }])
+      } catch {}
+
+      const next = [newAssignment, ...assignments]
+      setAssignments(next)
+      const key = `assignments:list:${courseId}`
+      localStorage.setItem(key, JSON.stringify(next))
+    }
+    doSave()
   }
 
   return (
@@ -198,6 +269,12 @@ export const CourseDetailView = () => {
                             <CheckCircle className='w-4 h-4' />
                             <span>{assignment.submissions} / {assignment.totalStudents} submitted</span>
                           </span>
+                          {assignment.attachedFile && assignment.attachedFile.url && (
+                            <>
+                              <span>•</span>
+                              <button onClick={() => setPreviewFile({ name: assignment.attachedFile.name, url: assignment.attachedFile.url, ext: (assignment.attachedFile.name || '').split('.').pop() })} className='text-[#7A1C1C] font-semibold hover:underline'>Preview material</button>
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -229,6 +306,9 @@ export const CourseDetailView = () => {
             setShowAddAssignmentModal(false)
           }}
         />
+      )}
+      {previewFile && (
+        <FilePreviewModal file={previewFile} onClose={() => setPreviewFile(null)} />
       )}
     </div>
   )

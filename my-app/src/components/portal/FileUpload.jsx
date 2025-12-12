@@ -1,48 +1,151 @@
-// ============= NEW FILE: File Upload Component with Drag & Drop =============
-import React, { useState, useCallback } from 'react';
-import { Upload, X, FileText, CheckCircle } from 'lucide-react';
+import React, { useState } from 'react';
+import { Upload, X, FileText, CheckCircle, AlertCircle } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
 
-export const FileUpload = ({ onClose }) => {
-  // State to track uploaded files and their progress
+export const FileUpload = ({ onClose, folderPath = '' }) => {
   const [files, setFiles] = useState([]);
   const [isDragging, setIsDragging] = useState(false);
 
-  // Handle file selection (both click and drag-and-drop)
-  const handleFiles = useCallback((selectedFiles) => {
+  const handleFiles = (selectedFiles) => {
     const fileArray = Array.from(selectedFiles);
     const newFiles = fileArray.map((file) => ({
       file,
       name: file.name,
-      size: (file.size / (1024 * 1024)).toFixed(2), // Convert to MB
+      size: (file.size / (1024 * 1024)).toFixed(2),
       progress: 0,
-      status: 'uploading', // uploading, complete, error
+      status: 'uploading',
     }));
 
-    setFiles((prev) => [...prev, ...newFiles]);
-
-    // Simulate upload progress for each file
-    newFiles.forEach((fileObj, index) => {
-      simulateUpload(files.length + index);
+    setFiles((prev) => {
+      const startIndex = prev.length;
+      const next = [...prev, ...newFiles];
+      newFiles.forEach((fileObj, index) => {
+        const absoluteIndex = startIndex + index;
+        uploadFileToSupabase(fileObj, absoluteIndex);
+      });
+      return next;
     });
-  }, [files.length]);
+  };
 
-  // Simulate file upload with progress bar
-  const simulateUpload = (fileIndex) => {
-    const interval = setInterval(() => {
+  const uploadFileToSupabase = async (fileObj, fileIndex) => {
+    try {
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setFiles((prevFiles) => {
+          const updatedFiles = [...prevFiles];
+          if (updatedFiles[fileIndex]) {
+            updatedFiles[fileIndex].status = 'error';
+            updatedFiles[fileIndex].error = 'Not authenticated';
+          }
+          return updatedFiles;
+        });
+        return;
+      }
+
+      const userId = user.id;
+      const safeName = fileObj.name.replace(/[^\w\-.]+/g, '_');
+      const timestamp = Date.now();
+      const prefix = folderPath ? `${folderPath}/` : '';
+      const path = `${userId}/${prefix}${timestamp}_${safeName}`;
+      const bucket = 'files';
+
+      // Simulate progress
+      const progressInterval = setInterval(() => {
+        setFiles((prevFiles) => {
+          const updatedFiles = [...prevFiles];
+          if (!updatedFiles[fileIndex] || updatedFiles[fileIndex].status !== 'uploading') {
+            clearInterval(progressInterval);
+            return prevFiles;
+          }
+          if (updatedFiles[fileIndex].progress < 90) {
+            updatedFiles[fileIndex].progress += 15;
+          }
+          return updatedFiles;
+        });
+      }, 150);
+
+      // Upload to Supabase Storage
+      const { error: uploadError } = await supabase.storage
+        .from(bucket)
+        .upload(path, fileObj.file, { 
+          upsert: true, 
+          contentType: fileObj.file.type || 'application/octet-stream' 
+        });
+
+      clearInterval(progressInterval);
+
+      if (uploadError) {
+        console.error('Upload error:', uploadError);
+        setFiles((prevFiles) => {
+          const updatedFiles = [...prevFiles];
+          if (updatedFiles[fileIndex]) {
+            updatedFiles[fileIndex].status = 'error';
+            updatedFiles[fileIndex].error = uploadError.message;
+          }
+          return updatedFiles;
+        });
+        return;
+      }
+
+      // Get public URL
+      const { data: publicData } = supabase.storage.from(bucket).getPublicUrl(path);
+
+      // Save file metadata to database
+      const { data: fileData, error: dbError } = await supabase.from('files').insert({
+        user_id: userId,
+        file_name: fileObj.name,
+        file_path: path,
+        file_size: Math.round(parseFloat(fileObj.size) * 1024 * 1024),
+        file_type: fileObj.file.type || 'application/octet-stream',
+        folder_path: folderPath || '',
+        bucket: bucket,
+        is_folder: false,
+        is_trashed: false
+      }).select().single();
+
+      if (dbError) {
+        console.error('Error saving file metadata:', dbError);
+      }
+
+      // Log activity
+      await supabase.from('activity_log').insert({
+        user_id: userId,
+        action_type: 'upload',
+        file_name: fileObj.name,
+        file_id: fileData?.file_id || null,
+        details: { 
+          size: fileObj.size, 
+          type: fileObj.file.type,
+          folder: folderPath || 'root'
+        }
+      });
+
       setFiles((prevFiles) => {
         const updatedFiles = [...prevFiles];
-        if (updatedFiles[fileIndex].progress < 100) {
-          updatedFiles[fileIndex].progress += 10;
-        } else {
+        if (updatedFiles[fileIndex]) {
+          updatedFiles[fileIndex].progress = 100;
           updatedFiles[fileIndex].status = 'complete';
-          clearInterval(interval);
+          updatedFiles[fileIndex].path = path;
+          updatedFiles[fileIndex].url = publicData?.publicUrl || '';
+          updatedFiles[fileIndex].bucket = bucket;
+          updatedFiles[fileIndex].fileId = fileData?.file_id;
         }
         return updatedFiles;
       });
-    }, 200);
+    } catch (err) {
+      console.error('Upload error:', err);
+      setFiles((prevFiles) => {
+        const updatedFiles = [...prevFiles];
+        if (updatedFiles[fileIndex]) {
+          updatedFiles[fileIndex].status = 'error';
+          updatedFiles[fileIndex].error = err.message;
+        }
+        return updatedFiles;
+      });
+    }
   };
 
-  // Handle drag events
   const handleDragEnter = (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -65,14 +168,12 @@ export const FileUpload = ({ onClose }) => {
     e.stopPropagation();
     setIsDragging(false);
     
-    // Handle dropped files
     const droppedFiles = e.dataTransfer.files;
     if (droppedFiles.length > 0) {
       handleFiles(droppedFiles);
     }
   };
 
-  // Handle file input change
   const handleFileInputChange = (e) => {
     const selectedFiles = e.target.files;
     if (selectedFiles.length > 0) {
@@ -80,14 +181,19 @@ export const FileUpload = ({ onClose }) => {
     }
   };
 
-  // Remove a file from the list
   const removeFile = (index) => {
     setFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const handleDone = () => {
+    window.dispatchEvent(new Event('app:files:updated'));
+    onClose();
+  };
+
+  const completedCount = files.filter(f => f.status === 'complete').length;
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      {/* Modal Container */}
       <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b-2 border-[#ACA8AE]">
@@ -131,7 +237,6 @@ export const FileUpload = ({ onClose }) => {
               onChange={handleFileInputChange}
               className="hidden"
               id="fileInput"
-              accept=".docx,.pdf,.pptx,.jpg,.png"
             />
             <label
               htmlFor="fileInput"
@@ -140,7 +245,7 @@ export const FileUpload = ({ onClose }) => {
               Browse Files
             </label>
             <p className="text-xs text-[#A6A4AA] mt-4">
-              Supported: .DOCX, .PDF, .PPTX, .JPG, .PNG
+              All file types supported (Max 50MB per file)
             </p>
           </div>
 
@@ -148,7 +253,10 @@ export const FileUpload = ({ onClose }) => {
           {files.length > 0 && (
             <div className="mt-6 max-h-64 overflow-y-auto">
               <h3 className="text-lg font-semibold text-[#585658] mb-3">
-                Uploading Files
+                {completedCount === files.length 
+                  ? `✓ ${completedCount} file(s) uploaded successfully`
+                  : `Uploading ${files.length} file(s)...`
+                }
               </h3>
               {files.map((fileObj, index) => (
                 <div
@@ -159,6 +267,8 @@ export const FileUpload = ({ onClose }) => {
                     <div className="flex items-center flex-1">
                       {fileObj.status === 'complete' ? (
                         <CheckCircle size={20} className="text-green-600 mr-2" />
+                      ) : fileObj.status === 'error' ? (
+                        <AlertCircle size={20} className="text-red-600 mr-2" />
                       ) : (
                         <FileText size={20} className="text-[#7A1C1C] mr-2" />
                       )}
@@ -168,6 +278,9 @@ export const FileUpload = ({ onClose }) => {
                         </p>
                         <p className="text-xs text-[#A6A4AA]">
                           {fileObj.size} MB
+                          {fileObj.error && (
+                            <span className="text-red-500 ml-2">• {fileObj.error}</span>
+                          )}
                         </p>
                       </div>
                     </div>
@@ -185,6 +298,8 @@ export const FileUpload = ({ onClose }) => {
                       className={`h-2.5 rounded-full transition-all duration-300 ${
                         fileObj.status === 'complete'
                           ? 'bg-green-600'
+                          : fileObj.status === 'error'
+                          ? 'bg-red-600'
                           : 'bg-[#7A1C1C]'
                       }`}
                       style={{ width: `${fileObj.progress}%` }}
@@ -194,6 +309,8 @@ export const FileUpload = ({ onClose }) => {
                   <p className="text-xs text-[#A6A4AA] mt-1 text-right">
                     {fileObj.status === 'complete'
                       ? 'Complete'
+                      : fileObj.status === 'error'
+                      ? 'Failed'
                       : `${fileObj.progress}%`}
                   </p>
                 </div>
@@ -211,15 +328,13 @@ export const FileUpload = ({ onClose }) => {
             Cancel
           </button>
           <button
-            onClick={onClose}
+            onClick={handleDone}
             className="px-6 py-2 bg-[#7A1C1C] text-white rounded-md hover:bg-[#5a1515] transition-colors"
-            disabled={files.length === 0}
           >
-            Done
+            {completedCount > 0 ? `Done (${completedCount} uploaded)` : 'Done'}
           </button>
         </div>
       </div>
     </div>
   );
 };
-

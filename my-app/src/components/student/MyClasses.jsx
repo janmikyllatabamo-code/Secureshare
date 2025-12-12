@@ -1,61 +1,47 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { BookOpen, User, Calendar, Users } from 'lucide-react'
+import { supabase } from '../../lib/supabase'
 
 export const MyClasses = () => {
   const navigate = useNavigate()
-  
-  // Mock data - in production, this would come from API
-  const classes = [
-    {
-      id: 1,
-      subjectCode: 'CS101',
-      subjectName: 'Introduction to Computer Science',
-      professorName: 'Dr. Sarah Johnson',
-      enrolledStudents: 45,
-      schedule: 'Mon, Wed, Fri 9:00 AM - 10:30 AM'
-    },
-    {
-      id: 2,
-      subjectCode: 'CS201',
-      subjectName: 'Data Structures and Algorithms',
-      professorName: 'Prof. Michael Chen',
-      enrolledStudents: 38,
-      schedule: 'Tue, Thu 2:00 PM - 3:30 PM'
-    },
-    {
-      id: 3,
-      subjectCode: 'MATH202',
-      subjectName: 'Discrete Mathematics',
-      professorName: 'Dr. Emily Rodriguez',
-      enrolledStudents: 52,
-      schedule: 'Mon, Wed 11:00 AM - 12:30 PM'
-    },
-    {
-      id: 4,
-      subjectCode: 'CS301',
-      subjectName: 'Database Systems',
-      professorName: 'Prof. David Kim',
-      enrolledStudents: 42,
-      schedule: 'Tue, Thu 10:00 AM - 11:30 AM'
-    },
-    {
-      id: 5,
-      subjectCode: 'CS401',
-      subjectName: 'Software Engineering',
-      professorName: 'Dr. Lisa Anderson',
-      enrolledStudents: 35,
-      schedule: 'Mon, Wed, Fri 1:00 PM - 2:30 PM'
-    },
-    {
-      id: 6,
-      subjectCode: 'ENG101',
-      subjectName: 'Technical Writing',
-      professorName: 'Prof. Robert Taylor',
-      enrolledStudents: 28,
-      schedule: 'Tue, Thu 3:00 PM - 4:30 PM'
+  const [classes, setClasses] = useState([])
+  useEffect(() => {
+    const load = async () => {
+      const authUserRaw = localStorage.getItem('authUser')
+      const authUser = authUserRaw ? JSON.parse(authUserRaw) : { email: '' }
+      let list = []
+      try {
+        const { data: enrolls, error } = await supabase
+          .from('enrollments')
+          .select('course_id')
+          .eq('student_email', authUser.email)
+        if (!error && Array.isArray(enrolls) && enrolls.length > 0) {
+          const ids = enrolls.map(e => e.course_id)
+          const { data: courses, error: cErr } = await supabase
+            .from('courses')
+            .select('id,subject_code,subject_name,enrolled_students,schedule')
+            .in('id', ids)
+          if (!cErr && Array.isArray(courses)) {
+            list = courses.map(c => ({
+              id: c.id,
+              subjectCode: c.subject_code,
+              subjectName: c.subject_name,
+              enrolledStudents: c.enrolled_students || 0,
+              schedule: c.schedule || ''
+            }))
+          }
+        }
+      } catch {}
+      if (list.length === 0) {
+        const storageKey = `enrollments:list:${authUser.email || 'Student'}`
+        const stored = localStorage.getItem(storageKey)
+        list = stored ? JSON.parse(stored) : []
+      }
+      setClasses(list)
     }
-  ]
+    load()
+  }, [])
 
   return (
     <div className='container mx-auto bg-gradient-to-br from-slate-50 via-white to-slate-50 min-h-screen m-0 p-0'>
@@ -111,18 +97,7 @@ export const MyClasses = () => {
 
               {/* Card Body */}
               <div className='px-6 py-5 space-y-4'>
-                {/* Professor Info */}
-                <div className='flex items-center gap-3'>
-                  <div className='p-2 bg-slate-100 rounded-lg'>
-                    <User className='w-4 h-4 text-[#7A1C1C]' />
-                  </div>
-                  <div className='flex-1 min-w-0'>
-                    <p className='text-xs text-slate-500 font-medium mb-0.5'>Professor</p>
-                    <p className='text-sm font-semibold text-slate-800 truncate'>
-                      {classItem.professorName}
-                    </p>
-                  </div>
-                </div>
+                
 
                 {/* Schedule Info */}
                 <div className='flex items-center gap-3'>

@@ -7,14 +7,14 @@ export const PortalNavbar = ({ onToggleSidebar }) => {
   const [openUserMenu, setOpenUserMenu] = useState(false)
   const [showNotifications, setShowNotifications] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
-  const [unreadCount, setUnreadCount] = useState(3) // Mock unread count
+  const [unreadCount, setUnreadCount] = useState(0)
+  const [notifications, setNotifications] = useState([])
   const [userInfo, setUserInfo] = useState({ fullName: 'User', email: '', role: 'Student' })
   const userMenuRef = useRef(null)
   const notificationRef = useRef(null)
   const navigate = useNavigate()
 
   useEffect(() => {
-    // Get user info from localStorage
     const authUser = localStorage.getItem('authUser')
     if (authUser) {
       try {
@@ -24,11 +24,17 @@ export const PortalNavbar = ({ onToggleSidebar }) => {
           email: user.email || '',
           role: user.role || 'Student'
         })
-      } catch (e) {
-        console.error('Error parsing user info:', e)
-      }
+      } catch {}
     }
   }, [])
+
+  useEffect(() => {
+    const key = userInfo.email ? `notifications:${userInfo.email}` : `notifications:${userInfo.role}`
+    const stored = localStorage.getItem(key)
+    const list = stored ? JSON.parse(stored) : []
+    setNotifications(list)
+    setUnreadCount(list.filter(n => !n.read).length)
+  }, [userInfo.email, userInfo.role])
 
   useEffect(() => {
     function onClickOutside(e) {
@@ -45,9 +51,10 @@ export const PortalNavbar = ({ onToggleSidebar }) => {
 
   const handleSearchSubmit = (e) => {
     e.preventDefault()
-    if (searchQuery.trim()) {
-      // TODO: Implement search functionality
-    }
+    const q = searchQuery.trim()
+    if (!q) return
+    const target = userInfo.role === 'Teacher' ? '/teacher-dashboard/files' : '/portal/files'
+    navigate(`${target}?q=${encodeURIComponent(q)}`)
   }
 
   const handleLogout = async () => {
@@ -112,24 +119,14 @@ export const PortalNavbar = ({ onToggleSidebar }) => {
                 <h3 className="text-sm font-bold text-slate-800">Notifications</h3>
               </div>
               <div className="divide-y divide-slate-100">
-                {unreadCount > 0 ? (
-                  <>
-                    <div className="px-4 py-3 hover:bg-slate-50 cursor-pointer">
-                      <p className="text-sm font-semibold text-slate-800">New assignment posted</p>
-                      <p className="text-xs text-slate-500 mt-1">CS101 - Introduction to Programming</p>
-                      <p className="text-xs text-slate-400 mt-1">2 hours ago</p>
+                {notifications.length > 0 ? (
+                  notifications.map((n, idx) => (
+                    <div key={idx} className="px-4 py-3 hover:bg-slate-50 cursor-pointer">
+                      <p className="text-sm font-semibold text-slate-800">{n.title}</p>
+                      {n.message && <p className="text-xs text-slate-500 mt-1">{n.message}</p>}
+                      {n.time && <p className="text-xs text-slate-400 mt-1">{n.time}</p>}
                     </div>
-                    <div className="px-4 py-3 hover:bg-slate-50 cursor-pointer">
-                      <p className="text-sm font-semibold text-slate-800">Grade received</p>
-                      <p className="text-xs text-slate-500 mt-1">Your assignment has been graded</p>
-                      <p className="text-xs text-slate-400 mt-1">1 day ago</p>
-                    </div>
-                    <div className="px-4 py-3 hover:bg-slate-50 cursor-pointer">
-                      <p className="text-sm font-semibold text-slate-800">File shared with you</p>
-                      <p className="text-xs text-slate-500 mt-1">Lecture notes from Prof. Smith</p>
-                      <p className="text-xs text-slate-400 mt-1">2 days ago</p>
-                    </div>
-                  </>
+                  ))
                 ) : (
                   <div className="px-4 py-8 text-center text-slate-400">
                     <Bell className="w-8 h-8 mx-auto mb-2 opacity-50" />
@@ -137,10 +134,14 @@ export const PortalNavbar = ({ onToggleSidebar }) => {
                   </div>
                 )}
               </div>
-              {unreadCount > 0 && (
+              {notifications.length > 0 && (
                 <div className="px-4 py-2 border-t border-slate-100 bg-slate-50">
                   <button 
                     onClick={() => {
+                      const key = userInfo.email ? `notifications:${userInfo.email}` : `notifications:${userInfo.role}`
+                      const list = notifications.map(n => ({ ...n, read: true }))
+                      localStorage.setItem(key, JSON.stringify(list))
+                      setNotifications(list)
                       setUnreadCount(0)
                       setShowNotifications(false)
                     }}

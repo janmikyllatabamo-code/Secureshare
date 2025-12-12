@@ -1,7 +1,8 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { ArrowLeft, BookOpen, Users, Calendar, FileText, Clock } from 'lucide-react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { AssignmentSubmissionModal } from './AssignmentSubmissionModal'
+import { supabase } from '../../lib/supabase'
 
 export const StudentCourseDetails = () => {
   const navigate = useNavigate()
@@ -9,51 +10,131 @@ export const StudentCourseDetails = () => {
   const [selectedAssignment, setSelectedAssignment] = useState(null)
   const [showSubmissionModal, setShowSubmissionModal] = useState(false)
   
-  // Mock data - in production, this would come from API based on courseId
-  const course = {
+  const [course, setCourse] = useState({
     id: courseId || '1',
-    subjectCode: 'CS101',
-    subjectName: 'Introduction to Computer Science',
-    professorName: 'Dr. Sarah Johnson',
-    enrolledStudents: 45,
-    schedule: 'Mon, Wed, Fri 9:00 AM - 10:30 AM',
-    description: 'An introductory course covering fundamental concepts of computer science including programming basics, data structures, and algorithms.'
-  }
+    subjectCode: 'Course',
+    subjectName: 'Course Details',
+    enrolledStudents: 0,
+    schedule: '',
+    description: ''
+  })
 
-  // Mock assignments data
-  const assignments = [
-    {
-      id: 1,
-      title: 'Assignment 1: Introduction to Programming',
-      dueDate: '2024-02-15',
-      status: 'submitted',
-      grade: 'A',
-      submittedAt: '2024-02-14'
-    },
-    {
-      id: 2,
-      title: 'Lab Exercise 2: Data Types',
-      dueDate: '2024-02-20',
-      status: 'pending',
-      grade: null,
-      submittedAt: null,
-      description: 'Complete the following exercises on Python data types:\n\n1. Create variables for different data types (int, float, string, boolean, list, dictionary)\n2. Perform type conversions between compatible types\n3. Write a function that accepts any data type and returns its type\n4. Submit your code as a Python file (.py)\n\nMake sure to include comments explaining your code.',
-      attachedFile: {
-        name: 'Lab_Exercise_2_Instructions.pdf',
-        size: 245760, // 240 KB in bytes
-        type: 'application/pdf',
-        url: '#' // Mock URL - in production this would be the actual file URL
+  useEffect(() => {
+    const load = async () => {
+      let foundCourse = null
+      try {
+        const { data, error } = await supabase
+          .from('courses')
+          .select('id,subject_code,subject_name,enrolled_students,schedule')
+          .eq('id', courseId)
+          .single()
+        if (!error && data) {
+          foundCourse = {
+            id: data.id,
+            subjectCode: data.subject_code,
+            subjectName: data.subject_name,
+            enrolledStudents: data.enrolled_students || 0,
+            schedule: data.schedule || '',
+            description: 'Course details and assignments.'
+          }
+        }
+      } catch {}
+      if (!foundCourse) {
+        const storageKey = 'classes:list:Teacher'
+        const stored = localStorage.getItem(storageKey)
+        const list = stored ? JSON.parse(stored) : []
+        const f = list.find(c => String(c.id) === String(courseId))
+        if (f) {
+          foundCourse = {
+            id: f.id,
+            subjectCode: f.subjectCode,
+            subjectName: f.subjectName,
+            enrolledStudents: f.enrolledStudents || 0,
+            schedule: f.schedule || '',
+            description: 'Course details and assignments.'
+          }
+        }
       }
-    },
-    {
-      id: 3,
-      title: 'Midterm Project',
-      dueDate: '2024-03-01',
-      status: 'not_started',
-      grade: null,
-      submittedAt: null
+      if (foundCourse) {
+        setCourse(foundCourse)
+      } else {
+        setCourse(prev => ({ ...prev, id: courseId || prev.id }))
+      }
     }
-  ]
+    load()
+  }, [courseId])
+
+  const [assignments, setAssignments] = useState([])
+
+  useEffect(() => {
+    const load = async () => {
+      let courseAssignments = []
+      try {
+        const { data, error } = await supabase
+          .from('assignments')
+          .select('id,title,description,due_date,status')
+          .eq('course_id', courseId)
+        if (!error && Array.isArray(data)) {
+          courseAssignments = data.map(a => ({
+            id: a.id,
+            title: a.title || 'Assignment',
+            dueDate: a.due_date || '',
+            status: 'not_started',
+            grade: null,
+            submittedAt: null
+          }))
+        }
+      } catch {}
+
+      if (courseAssignments.length === 0) {
+        const key = `assignments:list:${courseId}`
+        const stored = localStorage.getItem(key)
+        const list = stored ? JSON.parse(stored) : []
+        courseAssignments = list.map(a => ({
+          id: a.id,
+          title: a.title || 'Assignment',
+          dueDate: a.dueDate || a.due_time || '',
+          status: 'not_started',
+          grade: null,
+          submittedAt: null
+        }))
+      }
+
+      const authUserRaw = localStorage.getItem('authUser')
+      const authUser = authUserRaw ? JSON.parse(authUserRaw) : { email: '' }
+      let mine = []
+      try {
+        const { data: sRows } = await supabase
+          .from('submissions')
+          .select('assignment_id,status,grade,submitted_at')
+          .eq('course_id', courseId)
+          .eq('student_email', authUser.email)
+        if (Array.isArray(sRows)) {
+          mine = sRows.map(r => ({ assignmentId: r.assignment_id, status: r.status, grade: r.grade, submittedAt: r.submitted_at }))
+        }
+      } catch {}
+      if (mine.length === 0) {
+        const sStored = localStorage.getItem('submissions:list')
+        const sList = sStored ? JSON.parse(sStored) : []
+        mine = sList.filter(s => s.studentId === authUser.email)
+      }
+
+      const merged = courseAssignments.map(a => {
+        const sub = mine.find(s => (s.assignmentId && s.assignmentId === a.id) || s.title === a.title)
+        if (!sub) return a
+        const st = sub.status === 'graded' ? 'submitted' : (sub.status === 'pending' ? 'pending' : 'not_started')
+        return {
+          ...a,
+          status: st,
+          grade: sub.grade || null,
+          submittedAt: sub.submittedAt || null
+        }
+      })
+
+      setAssignments(merged)
+    }
+    load()
+  }, [courseId])
 
   const handleAssignmentClick = (assignment) => {
     setSelectedAssignment(assignment)
@@ -61,10 +142,114 @@ export const StudentCourseDetails = () => {
   }
 
   const handleSubmitAssignment = (submissionData) => {
-    // In production, this would upload the file to the server
-    // TODO: Replace with API call and toast notification
-    setShowSubmissionModal(false)
-    setSelectedAssignment(null)
+    const authUserRaw = localStorage.getItem('authUser')
+    const authUser = authUserRaw ? JSON.parse(authUserRaw) : { fullName: 'Student', email: '', role: 'Student', id: 'guest' }
+    const file = submissionData.file
+    if (!file) return
+
+    const safeName = (file.name || 'submission').replace(/[^\w\-.]+/g, '_')
+    const userId = authUser.id || 'guest'
+    const path = `${userId}/submissions/${Date.now()}_${safeName}`
+    const bucket = 'files'
+
+    const upload = async () => {
+      try {
+        const { error } = await supabase.storage
+          .from(bucket)
+          .upload(path, file, { upsert: true, contentType: file.type || 'application/octet-stream' })
+        if (error) throw error
+
+        const { data: publicData } = supabase.storage.from(bucket).getPublicUrl(path)
+        const fileUrl = publicData?.publicUrl || ''
+
+        await supabase
+          .from('submissions')
+          .insert([{
+            course_id: Number(courseId),
+            assignment_id: submissionData.assignmentId,
+            student_email: authUser.email,
+            student_name: authUser.fullName,
+            file_name: file.name,
+            file_size_bytes: file.size,
+            file_url: fileUrl,
+            bucket,
+            path,
+            status: 'pending'
+          }])
+
+        const record = {
+          id: Date.now(),
+          fileName: file.name,
+          fileSize: `${(file.size / (1024*1024)).toFixed(1)} MB`,
+          submittedAt: new Date().toLocaleString(),
+          course: `${course.subjectCode} - ${course.subjectName}`,
+          status: 'pending',
+          grade: null,
+          feedback: null,
+          studentName: authUser.fullName,
+          studentId: authUser.email || 'STU-LOCAL',
+          assignmentId: submissionData.assignmentId
+        }
+        const stored = localStorage.getItem('submissions:list')
+        const list = stored ? JSON.parse(stored) : []
+        localStorage.setItem('submissions:list', JSON.stringify([record, ...list]))
+
+        const notifKey = 'notifications:Teacher'
+        const nStored = localStorage.getItem(notifKey)
+        const nList = nStored ? JSON.parse(nStored) : []
+        const notif = { title: 'New assignment submission', message: `${authUser.fullName} submitted ${record.fileName}`, time: 'just now', read: false }
+        localStorage.setItem(notifKey, JSON.stringify([notif, ...nList]))
+
+        setAssignments(prev => prev.map(a => a.id === submissionData.assignmentId ? { ...a, status: 'pending', submittedAt: new Date().toLocaleDateString() } : a))
+        setShowSubmissionModal(false)
+        setSelectedAssignment(null)
+      } catch {}
+    }
+    upload()
+  }
+
+  const handleLeaveClass = async () => {
+    const authUserRaw = localStorage.getItem('authUser')
+    const authUser = authUserRaw ? JSON.parse(authUserRaw) : { email: '' }
+
+    try {
+      await supabase
+        .from('enrollments')
+        .delete()
+        .eq('course_id', courseId)
+        .eq('student_email', authUser.email)
+
+      const { data: courseRow } = await supabase
+        .from('courses')
+        .select('enrolled_students')
+        .eq('id', courseId)
+        .single()
+      const current = courseRow?.enrolled_students || 0
+      const next = Math.max(0, current - 1)
+      await supabase
+        .from('courses')
+        .update({ enrolled_students: next })
+        .eq('id', courseId)
+    } catch {}
+
+    const enrollKey = `enrollments:list:${authUser.email || 'Student'}`
+    const storedEnroll = localStorage.getItem(enrollKey)
+    const enrollList = storedEnroll ? JSON.parse(storedEnroll) : []
+    const nextEnroll = enrollList.filter(c => String(c.id) !== String(courseId))
+    localStorage.setItem(enrollKey, JSON.stringify(nextEnroll))
+
+    const classesKey = 'classes:list:Teacher'
+    const storedClasses = localStorage.getItem(classesKey)
+    const classList = storedClasses ? JSON.parse(storedClasses) : []
+    const idx = classList.findIndex(c => String(c.id) === String(courseId))
+    if (idx !== -1) {
+      const c = classList[idx]
+      const updated = [...classList]
+      updated[idx] = { ...c, enrolledStudents: Math.max(0, (c.enrolledStudents || 0) - 1) }
+      localStorage.setItem(classesKey, JSON.stringify(updated))
+    }
+
+    navigate('/portal/my-classes')
   }
 
   return (
@@ -98,6 +283,12 @@ export const StudentCourseDetails = () => {
               {course.description}
             </p>
           </div>
+          <button
+            onClick={handleLeaveClass}
+            className='bg-red-600 hover:bg-red-700 text-white font-semibold px-4 py-2 rounded-lg transition-colors'
+          >
+            Leave Class
+          </button>
         </div>
       </div>
 

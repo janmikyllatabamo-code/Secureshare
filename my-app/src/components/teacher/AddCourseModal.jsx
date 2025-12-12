@@ -28,7 +28,8 @@ export const AddCourseModal = ({ onClose, onSave }) => {
     }
     
     // Generate a mock enrollment link
-    const link = `https://tupconnect.edu/enroll/${courseCode.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}`
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost'
+    const link = `${origin}/enroll/${courseCode.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}`
     setEnrollmentLink(link)
     setError('')
   }
