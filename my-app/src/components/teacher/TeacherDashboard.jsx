@@ -47,10 +47,10 @@ export const TeacherDashboard = () => {
 
         const { data, error } = await supabase
           .from('courses')
-          .select('id,subject_code,subject_name,enrolled_students,schedule')
+          .select('course_id,subject_code,subject_name,enrolled_students,schedule')
         if (!error && Array.isArray(data)) {
           list = data.map(c => ({
-            id: c.id,
+            id: c.course_id,
             subjectCode: c.subject_code,
             subjectName: c.subject_name,
             enrolledStudents: c.enrolled_students || 0,

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { FileUpload } from './FileUpload'
 import { CreateFolderModal } from './CreateFolderModal'
 import { SecuritySettingsModal } from './SecuritySettingsModal'
-import { Upload, FolderPlus, Share2, Settings, FileText, Clock, Trash2, Users, TrendingUp, Folder, Image, FileSpreadsheet, Download, Edit, RefreshCw } from 'lucide-react'
+import { Upload, FolderPlus, Share2, Settings, FileText, Clock, Trash2, Users, TrendingUp, Folder, Image, FileSpreadsheet, Download, Edit, RefreshCw, Eye, Copy, Move, XCircle, X, BookOpen } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 
 export const Portal = () => {
@@ -61,14 +61,18 @@ export const Portal = () => {
       })
 
       // Fetch recent files
-      const { data: recent } = await supabase
+      const { data: recent, error: recentError } = await supabase
         .from('files')
         .select('*')
         .eq('user_id', user.id)
         .eq('is_trashed', false)
         .eq('is_folder', false)
-        .order('updated_at', { ascending: false })
+        .order('created_at', { ascending: false })
         .limit(8)
+
+      if (recentError) {
+        console.error('Error fetching recent files:', recentError)
+      }
 
       if (recent) {
         const transformedFiles = recent.map(file => {
@@ -183,6 +187,20 @@ export const Portal = () => {
         return <RefreshCw className='w-3 h-3 text-teal-600' />
       case 'rename':
         return <Edit className='w-3 h-3 text-orange-600' />
+      case 'view':
+        return <Eye className='w-3 h-3 text-indigo-600' />
+      case 'copy':
+        return <Copy className='w-3 h-3 text-cyan-600' />
+      case 'move':
+        return <Move className='w-3 h-3 text-pink-600' />
+      case 'permanent_delete':
+        return <XCircle className='w-3 h-3 text-red-700' />
+      case 'revoke_share':
+        return <X className='w-3 h-3 text-red-600' />
+      case 'empty_trash':
+        return <Trash2 className='w-3 h-3 text-red-700' />
+      case 'enrolled':
+        return <BookOpen className='w-3 h-3 text-blue-600' />
       default:
         return <Clock className='w-3 h-3 text-slate-600' />
     }
@@ -197,6 +215,13 @@ export const Portal = () => {
       case 'create_folder': return 'Created folder'
       case 'restore': return 'Restored'
       case 'rename': return 'Renamed'
+      case 'view': return 'Viewed'
+      case 'copy': return 'Copied'
+      case 'move': return 'Moved'
+      case 'permanent_delete': return 'Permanently deleted'
+      case 'revoke_share': return 'Revoked share access'
+      case 'empty_trash': return 'Emptied trash'
+      case 'enrolled': return 'Enrolled in'
       default: return 'Modified'
     }
   }
@@ -210,6 +235,13 @@ export const Portal = () => {
       case 'create_folder': return 'bg-yellow-100'
       case 'restore': return 'bg-teal-100'
       case 'rename': return 'bg-orange-100'
+      case 'view': return 'bg-indigo-100'
+      case 'copy': return 'bg-cyan-100'
+      case 'move': return 'bg-pink-100'
+      case 'permanent_delete': return 'bg-red-200'
+      case 'revoke_share': return 'bg-red-100'
+      case 'empty_trash': return 'bg-red-200'
+      case 'enrolled': return 'bg-blue-100'
       default: return 'bg-slate-100'
     }
   }
@@ -217,34 +249,48 @@ export const Portal = () => {
   const handleCreateFolder = async (folderName) => {
     try {
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      if (!user) {
+        console.error('User not authenticated')
+        return
+      }
 
-      const folderPath = `${folderName}-${Date.now()}`
-      
-      const { data: folderData } = await supabase.from('files').insert({
-        user_id: user.id,
-        file_name: folderName,
-        file_path: folderPath,
-        file_size: 0,
-        file_type: 'folder',
-        folder_path: '',
-        bucket: 'files',
-        is_folder: true
-      }).select().single()
+      // Use the create_folder function to create folder in database
+      const { data: folderRecord, error: folderError } = await supabase.rpc('create_folder', {
+        p_user_id: user.id,
+        p_folder_name: folderName,
+        p_parent_folder_path: '', // Root level folder
+        p_bucket: 'files'
+      })
+
+      if (folderError) {
+        console.error('Error creating folder:', folderError)
+        alert(`Failed to create folder: ${folderError.message}`)
+        return
+      }
 
       // Log activity
-      await supabase.from('activity_log').insert({
-        user_id: user.id,
-        action_type: 'create_folder',
-        file_name: folderName,
-        file_id: folderData?.file_id || null,
-        details: { folder_path: folderPath }
-      })
+      try {
+        await supabase.from('activity_log').insert({
+          user_id: user.id,
+          action_type: 'create_folder',
+          file_name: folderName,
+          file_id: folderRecord?.file_id || null,
+          details: { 
+            folder_path: folderRecord?.file_path || '',
+            parent: 'root'
+          }
+        })
+      } catch (activityError) {
+        console.warn('Failed to log activity (non-critical):', activityError)
+      }
       
+      // Refresh dashboard and dispatch event
       fetchDashboardData()
+      window.dispatchEvent(new Event('app:files:updated'))
       navigate('/portal/files')
     } catch (err) {
       console.error('Create folder error:', err)
+      alert(`Failed to create folder: ${err.message}`)
     }
   }
 

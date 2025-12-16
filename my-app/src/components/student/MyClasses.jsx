@@ -6,41 +6,69 @@ import { supabase } from '../../lib/supabase'
 export const MyClasses = () => {
   const navigate = useNavigate()
   const [classes, setClasses] = useState([])
-  useEffect(() => {
-    const load = async () => {
-      const authUserRaw = localStorage.getItem('authUser')
-      const authUser = authUserRaw ? JSON.parse(authUserRaw) : { email: '' }
-      let list = []
+  const loadClasses = async () => {
+    const authUserRaw = localStorage.getItem('authUser')
+    const authUser = authUserRaw ? JSON.parse(authUserRaw) : { email: '' }
+    let list = []
       try {
-        const { data: enrolls, error } = await supabase
-          .from('enrollments')
-          .select('course_id')
-          .eq('student_email', authUser.email)
-        if (!error && Array.isArray(enrolls) && enrolls.length > 0) {
-          const ids = enrolls.map(e => e.course_id)
-          const { data: courses, error: cErr } = await supabase
-            .from('courses')
-            .select('id,subject_code,subject_name,enrolled_students,schedule')
-            .in('id', ids)
-          if (!cErr && Array.isArray(courses)) {
-            list = courses.map(c => ({
-              id: c.id,
-              subjectCode: c.subject_code,
-              subjectName: c.subject_name,
-              enrolledStudents: c.enrolled_students || 0,
-              schedule: c.schedule || ''
-            }))
+        // Get student's user_id first
+        const { data: studentUser } = await supabase
+          .from('users')
+          .select('user_id')
+          .eq('email', authUser.email)
+          .eq('role', 'student')
+          .maybeSingle()
+
+        if (studentUser && studentUser.user_id) {
+          // Query enrollments using student_id (UUID)
+          const { data: enrolls, error } = await supabase
+            .from('enrollments')
+            .select('course_id')
+            .eq('student_id', studentUser.user_id)
+          
+          if (!error && Array.isArray(enrolls) && enrolls.length > 0) {
+            const ids = enrolls.map(e => e.course_id).filter(Boolean)
+            if (ids.length > 0) {
+              const { data: courses, error: cErr } = await supabase
+                .from('courses')
+                .select('course_id,subject_code,subject_name,enrolled_students,schedule')
+                .in('course_id', ids)
+              if (!cErr && Array.isArray(courses)) {
+                list = courses.map(c => ({
+                  id: c.course_id, // Use UUID from database
+                  subjectCode: c.subject_code,
+                  subjectName: c.subject_name,
+                  enrolledStudents: c.enrolled_students || 0,
+                  schedule: c.schedule || ''
+                }))
+              }
+            }
           }
         }
-      } catch {}
-      if (list.length === 0) {
-        const storageKey = `enrollments:list:${authUser.email || 'Student'}`
-        const stored = localStorage.getItem(storageKey)
-        list = stored ? JSON.parse(stored) : []
+      } catch (err) {
+        console.error('Error loading enrollments:', err)
       }
-      setClasses(list)
+    if (list.length === 0) {
+      const storageKey = `enrollments:list:${authUser.email || 'Student'}`
+      const stored = localStorage.getItem(storageKey)
+      list = stored ? JSON.parse(stored) : []
     }
-    load()
+    setClasses(list)
+  }
+
+  useEffect(() => {
+    loadClasses()
+  }, [])
+
+  // Listen for enrollment updates
+  useEffect(() => {
+    const handleEnrollmentUpdate = () => {
+      loadClasses()
+    }
+    window.addEventListener('app:enrollments:updated', handleEnrollmentUpdate)
+    return () => {
+      window.removeEventListener('app:enrollments:updated', handleEnrollmentUpdate)
+    }
   }, [])
 
   return (

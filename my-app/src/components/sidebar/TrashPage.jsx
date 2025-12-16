@@ -141,6 +141,11 @@ export const TrashPage = () => {
         return
       }
 
+      // Log permanent delete action
+      await logActivity('permanent_delete', file.file_name, file.file_id, { 
+        was_folder: file.is_folder || false
+      })
+
       fetchTrashedFiles()
       window.dispatchEvent(new Event('app:files:updated'))
     } catch (err) {
@@ -178,6 +183,11 @@ export const TrashPage = () => {
         console.error('Empty trash error:', error)
         return
       }
+
+      // Log empty trash action
+      await logActivity('empty_trash', `${trashed.length} files`, null, { 
+        count: trashed.length 
+      })
 
       fetchTrashedFiles()
       window.dispatchEvent(new Event('app:files:updated'))

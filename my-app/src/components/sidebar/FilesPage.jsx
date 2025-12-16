@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { useLocation } from 'react-router-dom'
-import { Upload, FolderPlus, FileText, Clock, Copy as CopyIcon, Scissors, ClipboardPaste, Move, Pencil, Trash2, Download, Folder, Image, FileSpreadsheet, Presentation, ChevronRight } from 'lucide-react'
+import { Upload, FolderPlus, FileText, Clock, Move, Pencil, Trash2, Download, Folder, Image, FileSpreadsheet, Presentation, ChevronRight } from 'lucide-react'
 import { FilePreviewModal } from '../portal/FilePreviewModal'
 import { FileUpload } from '../portal/FileUpload'
 import { CreateFolderModal } from '../portal/CreateFolderModal'
@@ -12,12 +12,14 @@ export const FilesPage = () => {
   const [searchQuery, setSearchQuery] = useState('')
   const [typeFilter, setTypeFilter] = useState('all')
   const [sortBy, setSortBy] = useState('date-new')
-  const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, targetFile: null })
+  const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, targetFile: null, showMoveSubmenu: false })
   const [clipboard, setClipboard] = useState({ file: null, mode: null })
   const [previewFile, setPreviewFile] = useState(null)
   const [loading, setLoading] = useState(true)
   const menuRef = useRef(null)
+  const moveSubmenuRef = useRef(null)
   const [files, setFiles] = useState([])
+  const [folders, setFolders] = useState([]) // Store folders separately for Move submenu
   const [currentPath, setCurrentPath] = useState('')
   const [currentFolderName, setCurrentFolderName] = useState('')
   const location = useLocation()
@@ -60,13 +62,51 @@ export const FilesPage = () => {
       }
 
       // Transform data to match component structure
-      const transformedFiles = (data || []).map(file => {
+      // Use Promise.all to generate signed URLs for all files
+      const transformedFiles = await Promise.all((data || []).map(async (file) => {
         const nameParts = file.file_name.split('.')
         const ext = file.is_folder ? 'folder' : (nameParts.length > 1 ? nameParts.pop() : '')
         const name = file.is_folder ? file.file_name : nameParts.join('.')
         
-        // Get public URL
-        const { data: urlData } = supabase.storage.from(file.bucket).getPublicUrl(file.file_path)
+        // For folders, no URL needed
+        if (file.is_folder) {
+          return {
+            id: file.file_id,
+            name: name,
+            ext: ext.toLowerCase(),
+            sizeMB: file.file_size / (1024 * 1024),
+            updatedAt: new Date(file.updated_at),
+            path: file.file_path,
+            url: '',
+            bucket: file.bucket,
+            parentPath: file.folder_path || '',
+            fullPath: file.file_path,
+            isFolder: file.is_folder,
+            fileId: file.file_id
+          }
+        }
+        
+        // For files, generate signed URL (works for private buckets)
+        let fileUrl = ''
+        try {
+          // Try signed URL first (required for private buckets)
+          const { data: signedData, error: signedError } = await supabase.storage
+            .from(file.bucket || 'files')
+            .createSignedUrl(file.file_path, 3600) // 1 hour expiration
+          
+          if (!signedError && signedData?.signedUrl) {
+            fileUrl = signedData.signedUrl
+          } else {
+            // Fallback to public URL if bucket is public
+            const { data: urlData } = supabase.storage
+              .from(file.bucket || 'files')
+              .getPublicUrl(file.file_path)
+            fileUrl = urlData?.publicUrl || ''
+          }
+        } catch (urlError) {
+          console.error('Error generating file URL:', urlError, { bucket: file.bucket, path: file.file_path })
+          // Continue with empty URL - will be generated on demand
+        }
         
         return {
           id: file.file_id,
@@ -75,16 +115,20 @@ export const FilesPage = () => {
           sizeMB: file.file_size / (1024 * 1024),
           updatedAt: new Date(file.updated_at),
           path: file.file_path,
-          url: urlData?.publicUrl || '',
-          bucket: file.bucket,
+          url: fileUrl,
+          bucket: file.bucket || 'files',
           parentPath: file.folder_path || '',
           fullPath: file.file_path,
           isFolder: file.is_folder,
           fileId: file.file_id
         }
-      })
+      }))
 
       setFiles(transformedFiles)
+      
+      // Separate folders for Move submenu
+      const folderList = transformedFiles.filter(f => f.ext === 'folder')
+      setFolders(folderList)
     } catch (err) {
       console.error('Error:', err)
     } finally {
@@ -208,9 +252,42 @@ export const FilesPage = () => {
     setContextMenu({ visible: true, x: e.clientX, y: e.clientY, targetFile: file })
   }
 
-  const previewFileNow = (file) => {
+  const previewFileNow = async (file) => {
     if (file.ext === 'folder') return
-    setPreviewFile({ name: `${file.name}.${file.ext}`, url: file.url, ext: file.ext })
+    
+    // If URL is missing or expired, generate a new signed URL
+    let previewUrl = file.url
+    if (!previewUrl && file.path && file.bucket) {
+      try {
+        const { data: signedData, error: signedError } = await supabase.storage
+          .from(file.bucket)
+          .createSignedUrl(file.path, 3600) // 1 hour expiration
+        
+        if (!signedError && signedData?.signedUrl) {
+          previewUrl = signedData.signedUrl
+        } else {
+          console.error('Error generating signed URL:', signedError)
+          // Try public URL as fallback
+          const { data: urlData } = supabase.storage
+            .from(file.bucket)
+            .getPublicUrl(file.path)
+          previewUrl = urlData?.publicUrl || ''
+        }
+      } catch (error) {
+        console.error('Error generating preview URL:', error)
+      }
+    }
+    
+    setPreviewFile({ 
+      name: `${file.name}.${file.ext}`, 
+      url: previewUrl, 
+      ext: file.ext,
+      path: file.path,
+      bucket: file.bucket,
+      fileId: file.fileId
+    })
+    // Log view action
+    await logActivity('view', `${file.name}.${file.ext}`, file.fileId)
   }
 
   const handleDownload = async () => {
@@ -265,7 +342,7 @@ export const FilesPage = () => {
           .copy(src.path, newPath)
         
         if (!copyError) {
-          await supabase.from('files').insert({
+          const { data: newFile } = await supabase.from('files').insert({
             user_id: user.id,
             file_name: `${newName}.${src.ext}`,
             file_path: newPath,
@@ -274,14 +351,39 @@ export const FilesPage = () => {
             folder_path: currentPath,
             bucket: src.bucket,
             is_folder: false
-          })
+          }).select().single()
+          
+          // Log copy action
+          if (newFile) {
+            await logActivity('copy', `${newName}.${src.ext}`, newFile.file_id, { 
+              original_file: `${src.name}.${src.ext}`,
+              original_file_id: src.fileId,
+              destination: currentPath || 'root'
+            })
+          }
         }
       } else if (clipboard.mode === 'cut') {
         // Move file - update folder_path
+        // Get current folder_path from database
+        const { data: currentFile } = await supabase
+          .from('files')
+          .select('folder_path')
+          .eq('file_id', src.fileId)
+          .single()
+        
+        const oldPath = currentFile?.folder_path || 'root'
         await supabase
           .from('files')
           .update({ folder_path: currentPath, updated_at: new Date().toISOString() })
           .eq('file_id', src.fileId)
+        
+        // Log move action
+        const fileName = src.ext === 'folder' ? src.name : `${src.name}.${src.ext}`
+        await logActivity('move', fileName, src.fileId, { 
+          from: oldPath,
+          to: currentPath || 'root'
+        })
+        
         setClipboard({ file: null, mode: null })
       }
       
@@ -292,9 +394,44 @@ export const FilesPage = () => {
     setContextMenu((s) => ({ ...s, visible: false }))
   }
 
-  const handleMove = () => {
-    setClipboard({ file: contextMenu.targetFile, mode: 'cut' })
-    setContextMenu((s) => ({ ...s, visible: false }))
+  const handleMoveToFolder = async (targetFolder) => {
+    const file = contextMenu.targetFile
+    if (!file) return
+    
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      // Get current folder_path from database
+      const { data: currentFile } = await supabase
+        .from('files')
+        .select('folder_path')
+        .eq('file_id', file.fileId)
+        .single()
+      
+      const oldPath = currentFile?.folder_path || 'root'
+      // Use the folder's file_path as the destination folder_path
+      // The folder's file_path is the full path to the folder itself
+      const newPath = targetFolder.path || targetFolder.fullPath || ''
+      
+      await supabase
+        .from('files')
+        .update({ folder_path: newPath, updated_at: new Date().toISOString() })
+        .eq('file_id', file.fileId)
+      
+      // Log move action
+      const fileName = file.ext === 'folder' ? file.name : `${file.name}.${file.ext}`
+      await logActivity('move', fileName, file.fileId, { 
+        from: oldPath,
+        to: newPath || 'root'
+      })
+      
+      fetchFiles()
+      window.dispatchEvent(new Event('app:files:updated'))
+      setContextMenu({ visible: false, x: 0, y: 0, targetFile: null, showMoveSubmenu: false })
+    } catch (err) {
+      console.error('Move error:', err)
+    }
   }
 
   const handleRename = async () => {
@@ -347,27 +484,41 @@ export const FilesPage = () => {
   const handleCreateFolder = async (folderName) => {
     try {
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      if (!user) {
+        console.error('User not authenticated')
+        return
+      }
 
-      const folderPath = `${currentPath ? currentPath + '/' : ''}${folderName}-${Date.now()}`
+      // Use the create_folder function to create folder in database
+      const { data: folderRecord, error: folderError } = await supabase.rpc('create_folder', {
+        p_user_id: user.id,
+        p_folder_name: folderName,
+        p_parent_folder_path: currentPath || '', // Use current path if in a folder
+        p_bucket: 'files'
+      })
+
+      if (folderError) {
+        console.error('Error creating folder:', folderError)
+        alert(`Failed to create folder: ${folderError.message}`)
+        return
+      }
+
+      // Log activity
+      try {
+        await logActivity('create_folder', folderName, folderRecord?.file_id, { 
+          parent: currentPath || 'root',
+          folder_path: folderRecord?.file_path || ''
+        })
+      } catch (activityError) {
+        console.warn('Failed to log activity (non-critical):', activityError)
+      }
       
-      const { data: folderData } = await supabase.from('files').insert({
-        user_id: user.id,
-        file_name: folderName,
-        file_path: folderPath,
-        file_size: 0,
-        file_type: 'folder',
-        folder_path: currentPath,
-        bucket: 'files',
-        is_folder: true
-      }).select().single()
-      
-      await logActivity('create_folder', folderName, folderData?.file_id, { parent: currentPath || 'root' })
-      
+      // Refresh files list and dispatch event
       fetchFiles()
       window.dispatchEvent(new Event('app:files:updated'))
     } catch (err) {
       console.error('Create folder error:', err)
+      alert(`Failed to create folder: ${err.message}`)
     }
   }
 
@@ -562,7 +713,7 @@ export const FilesPage = () => {
         <div className='fixed inset-0 z-50' style={{ pointerEvents: 'none' }}>
           <div
             ref={menuRef}
-            className='absolute min-w-[200px] rounded-lg border border-slate-200 bg-white shadow-xl overflow-hidden'
+            className='absolute min-w-[200px] rounded-lg border border-slate-200 bg-white shadow-xl overflow-visible'
             style={{ top: contextMenu.y, left: contextMenu.x, pointerEvents: 'auto' }}
           >
             <ul className='py-1 text-sm text-slate-700'>
@@ -574,30 +725,55 @@ export const FilesPage = () => {
                   </button>
                 </li>
               )}
-              <li>
-                <button onClick={handleCopy} className='w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50'>
-                  <CopyIcon className='w-4 h-4' />
-                  <span>Copy</span>
+              <li 
+                className='relative'
+                onMouseEnter={() => {
+                  if (folders.length > 0) {
+                    setContextMenu((s) => ({ ...s, showMoveSubmenu: true }))
+                  }
+                }}
+                onMouseLeave={() => {
+                  setContextMenu((s) => ({ ...s, showMoveSubmenu: false }))
+                }}
+              >
+                <button 
+                  onClick={() => {
+                    if (folders.length === 0) {
+                      // If no folders, just close menu
+                      setContextMenu({ visible: false, x: 0, y: 0, targetFile: null, showMoveSubmenu: false })
+                    }
+                  }}
+                  className='w-full flex items-center justify-between gap-2 px-3 py-2 hover:bg-slate-50'
+                >
+                  <div className='flex items-center gap-2'>
+                    <Move className='w-4 h-4' />
+                    <span>Move</span>
+                  </div>
+                  {folders.length > 0 && (
+                    <ChevronRight className='w-4 h-4' />
+                  )}
                 </button>
-              </li>
-              <li>
-                <button onClick={handleCut} className='w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50'>
-                  <Scissors className='w-4 h-4' />
-                  <span>Cut</span>
-                </button>
-              </li>
-              <li>
-                <button onClick={handlePaste} disabled={!clipboard.file} className={`w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 ${!clipboard.file ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                  <ClipboardPaste className='w-4 h-4' />
-                  <span>Paste</span>
-                </button>
-              </li>
-              <li><div className='my-1 border-t border-slate-100' /></li>
-              <li>
-                <button onClick={handleMove} className='w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50'>
-                  <Move className='w-4 h-4' />
-                  <span>Move</span>
-                </button>
+                {contextMenu.showMoveSubmenu && folders.length > 0 && (
+                  <div
+                    ref={moveSubmenuRef}
+                    className='absolute left-full top-0 ml-1 min-w-[200px] rounded-lg border border-slate-200 bg-white shadow-xl py-1 z-50'
+                    style={{ pointerEvents: 'auto' }}
+                  >
+                    <ul className='text-sm text-slate-700 max-h-[300px] overflow-y-auto'>
+                      {folders.map((folder) => (
+                        <li key={folder.id}>
+                          <button
+                            onClick={() => handleMoveToFolder(folder)}
+                            className='w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left'
+                          >
+                            <Folder className='w-4 h-4 text-yellow-600' />
+                            <span className='truncate'>{folder.name}</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </li>
               <li>
                 <button onClick={handleRename} className='w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50'>

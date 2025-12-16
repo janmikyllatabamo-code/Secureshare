@@ -1,149 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { Share2, Users, FileText, Clock, X, Mail, UserPlus, Trash2, ExternalLink } from 'lucide-react'
+import { Share2, Users, FileText, Clock, Trash2, ExternalLink } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-
-// Share Modal Component
-const ShareModal = ({ onClose, onShare, userFiles }) => {
-  const [emails, setEmails] = useState('')
-  const [permission, setPermission] = useState('View')
-  const [selectedFileId, setSelectedFileId] = useState('')
-  const [expiryDays, setExpiryDays] = useState(7)
-  const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
-
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    const emailList = emails.split(',').map(e => e.trim()).filter(Boolean)
-    if (emailList.length === 0) {
-      setError('Enter at least one email')
-      return
-    }
-    if (!selectedFileId) {
-      setError('Please select a file to share')
-      return
-    }
-    setError('')
-    setLoading(true)
-    await onShare({ emails: emailList, permission, fileId: selectedFileId, expiryDays })
-    setLoading(false)
-    onClose()
-  }
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-lg mx-4 overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white">
-          <div className='flex items-center gap-2'>
-            <div className='p-2 rounded-lg bg-gradient-to-br from-[#7A1C1C] to-[#9B2D2D]'>
-              <Share2 className='w-4 h-4 text-white' />
-            </div>
-            <h2 className="text-lg font-bold text-slate-800">Share File</h2>
-          </div>
-          <button onClick={onClose} className="p-1.5 rounded-md text-slate-600 hover:bg-slate-100">
-            <X className='w-5 h-5' />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="px-6 py-5 space-y-5">
-          {/* File Selection */}
-          <div>
-            <label className='block text-sm font-semibold text-slate-700 mb-2'>
-              Select File <span className='text-red-500'>*</span>
-            </label>
-            <select
-              value={selectedFileId}
-              onChange={(e) => setSelectedFileId(e.target.value)}
-              className='w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#7A1C1C]'
-            >
-              <option value="">Choose a file...</option>
-              {userFiles.map(file => (
-                <option key={file.file_id} value={file.file_id}>
-                  {file.file_name}
-                </option>
-              ))}
-            </select>
-            {userFiles.length === 0 && (
-              <p className='mt-1 text-xs text-amber-600'>No files available. Upload a file first.</p>
-            )}
-          </div>
-
-          {/* Email Input */}
-          <div>
-            <label className='block text-sm font-semibold text-slate-700 mb-2'>
-              Share with (Email) <span className='text-red-500'>*</span>
-            </label>
-            <div className='flex items-center border rounded-lg px-3 py-2 border-slate-300 focus-within:border-[#7A1C1C]'>
-              <Mail className='w-4 h-4 text-slate-400 mr-2' />
-              <input
-                type="text"
-                value={emails}
-                onChange={(e) => setEmails(e.target.value)}
-                placeholder="email@example.com, another@example.com"
-                className='w-full outline-none text-sm'
-              />
-            </div>
-            <p className='mt-1 text-xs text-slate-500'>Separate multiple emails with commas</p>
-          </div>
-
-          {/* Permission Level */}
-          <div>
-            <label className='block text-sm font-semibold text-slate-700 mb-2'>Permission Level</label>
-            <div className='flex items-center gap-2'>
-              <UserPlus className='w-4 h-4 text-slate-400' />
-              <select 
-                value={permission} 
-                onChange={(e) => setPermission(e.target.value)} 
-                className='border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#7A1C1C] w-full'
-              >
-                <option value='View'>View Only</option>
-                <option value='Download'>View & Download</option>
-                <option value='Edit'>Full Access</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Expiry */}
-          <div>
-            <label className='block text-sm font-semibold text-slate-700 mb-2'>Link Expires In</label>
-            <select 
-              value={expiryDays} 
-              onChange={(e) => setExpiryDays(Number(e.target.value))} 
-              className='border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#7A1C1C] w-full'
-            >
-              <option value={1}>1 day</option>
-              <option value={7}>7 days</option>
-              <option value={14}>14 days</option>
-              <option value={30}>30 days</option>
-              <option value={90}>90 days</option>
-              <option value={0}>Never</option>
-            </select>
-          </div>
-
-          {error && <p className='text-xs text-red-600 bg-red-50 p-2 rounded'>{error}</p>}
-        </form>
-
-        <div className='flex items-center justify-end gap-2 px-6 py-4 border-t border-slate-200 bg-slate-50'>
-          <button onClick={onClose} type='button' className='px-4 py-2 text-sm rounded-lg border border-slate-300 text-slate-700 hover:bg-white transition-colors'>
-            Cancel
-          </button>
-          <button 
-            onClick={handleSubmit} 
-            disabled={loading || userFiles.length === 0}
-            className='px-4 py-2 text-sm rounded-lg text-white bg-[#7A1C1C] hover:bg-[#5a1515] transition-colors disabled:opacity-50'
-          >
-            {loading ? 'Sharing...' : 'Share'}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
+import { ShareAccessModal } from '../portal/ShareAccessModal'
 
 export const SharedPage = () => {
   const [showShareModal, setShowShareModal] = useState(false)
   const [sharedItems, setSharedItems] = useState([])
   const [sharedWithMe, setSharedWithMe] = useState([])
-  const [userFiles, setUserFiles] = useState([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('shared-by-me')
 
@@ -181,37 +44,180 @@ export const SharedPage = () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      // Fetch user's files (for sharing)
-      const { data: files } = await supabase
-        .from('files')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('is_trashed', false)
-        .eq('is_folder', false)
-      
-      setUserFiles(files || [])
+      // Note: ShareAccessModal handles file upload, so we don't need to fetch userFiles here
 
       // Fetch shares created by user
-      const { data: myShares } = await supabase
+      const { data: myShares, error: mySharesError } = await supabase
         .from('shared_access')
         .select(`
           *,
-          files (*)
+          files (
+            file_id,
+            file_name,
+            file_path,
+            file_size,
+            file_type,
+            bucket,
+            user_id
+          )
         `)
         .eq('owner_id', user.id)
         .order('created_at', { ascending: false })
 
+      if (mySharesError) {
+        console.error('Error fetching my shared files:', mySharesError)
+      }
+
+      // Always fetch file data separately to ensure we have complete information
+      // This is more reliable than relying on the join which might fail due to RLS
+      if (myShares && myShares.length > 0) {
+        const fileIds = myShares.map(s => s.file_id).filter(Boolean)
+        if (fileIds.length > 0) {
+          // Fetch files with all necessary data
+          const { data: filesData, error: filesError } = await supabase
+            .from('files')
+            .select('file_id, file_name, file_path, file_size, file_type, bucket, user_id')
+            .in('file_id', fileIds)
+          
+          if (filesError) {
+            console.error('Error fetching file data:', filesError)
+            if (filesError.message?.includes('policy') || filesError.message?.includes('RLS') || 
+                filesError.code === '42501' || filesError.code === 'PGRST301') {
+              console.error('🚫 RLS policy is blocking file access!')
+              console.error('📝 Please run FIX_SHARED_FILES_RLS.sql in Supabase SQL Editor to fix this.')
+            }
+          }
+          
+          // Map complete file data to shares
+          if (filesData && filesData.length > 0) {
+            // Create a map for quick lookup - handle both UUID and string file_ids
+            const fileMap = new Map()
+            filesData.forEach(f => {
+              // Store with both string and original value for matching
+              fileMap.set(String(f.file_id), f)
+              fileMap.set(f.file_id, f)
+            })
+            
+            myShares.forEach(share => {
+              // Try multiple ways to match the file_id
+              let fileData = fileMap.get(share.file_id) || 
+                           fileMap.get(String(share.file_id)) ||
+                           filesData.find(f => String(f.file_id) === String(share.file_id))
+              
+              if (fileData) {
+                share.files = fileData
+              } else {
+                console.warn(`File not found in batch for share_id ${share.share_id}, file_id ${share.file_id}`)
+              }
+            })
+          } else {
+            console.warn('No files data returned for fileIds:', fileIds)
+          }
+        }
+      }
+
       setSharedItems(myShares || [])
 
       // Fetch files shared with me
-      const { data: sharedToMe } = await supabase
+      // Check both shared_with_email (case-insensitive) and shared_with_id
+      // Exclude files I shared (already in myShares)
+      const userEmail = user.email?.toLowerCase() || ''
+      const { data: sharedToMe, error: sharedToMeError } = await supabase
         .from('shared_access')
         .select(`
           *,
-          files (*)
+          files (
+            file_id,
+            file_name,
+            file_path,
+            file_size,
+            file_type,
+            bucket,
+            user_id
+          )
         `)
-        .or(`shared_with_id.eq.${user.id},shared_with_email.eq.${user.email}`)
+        .or(`shared_with_email.ilike.%${userEmail}%,shared_with_id.eq.${user.id}`)
+        .neq('owner_id', user.id) // Exclude files I shared (already in myShares)
         .order('created_at', { ascending: false })
+
+      if (sharedToMeError) {
+        console.error('Error fetching shared files:', sharedToMeError)
+      }
+
+      // Always fetch file data separately to ensure we have complete information
+      // This is more reliable than relying on the join which might fail due to RLS
+      if (sharedToMe && sharedToMe.length > 0) {
+        const fileIds = sharedToMe.map(s => s.file_id).filter(Boolean)
+        if (fileIds.length > 0) {
+          // Fetch files with all necessary data
+          const { data: filesData, error: filesError } = await supabase
+            .from('files')
+            .select('file_id, file_name, file_path, file_size, file_type, bucket, user_id')
+            .in('file_id', fileIds)
+          
+          if (filesError) {
+            console.error('Error fetching file data:', filesError)
+            if (filesError.message?.includes('policy') || filesError.message?.includes('RLS') || 
+                filesError.code === '42501' || filesError.code === 'PGRST301') {
+              console.error('🚫 RLS policy is blocking file access!')
+              console.error('📝 Please run FIX_SHARED_FILES_RLS.sql in Supabase SQL Editor to fix this.')
+            }
+          }
+          
+          // Map complete file data to shares
+          if (filesData && filesData.length > 0) {
+            // Create a map for quick lookup - handle both UUID and string file_ids
+            const fileMap = new Map()
+            filesData.forEach(f => {
+              // Store with both string and original value for matching
+              const fileIdStr = String(f.file_id)
+              fileMap.set(fileIdStr, f)
+              fileMap.set(f.file_id, f)
+              // Also store with trimmed/cleaned versions
+              if (fileIdStr.includes('-')) {
+                // UUID format
+                fileMap.set(fileIdStr.toLowerCase(), f)
+                fileMap.set(fileIdStr.toUpperCase(), f)
+              }
+            })
+            
+            sharedToMe.forEach(share => {
+              // First check if join already provided file data
+              if (share.files && (share.files.file_name || share.files.name)) {
+                // Join worked, use that data
+                return
+              }
+              
+              // Try multiple ways to match the file_id (handle UUID vs string)
+              const shareFileIdStr = String(share.file_id)
+              let fileData = fileMap.get(share.file_id) || 
+                           fileMap.get(shareFileIdStr) ||
+                           fileMap.get(shareFileIdStr.toLowerCase()) ||
+                           fileMap.get(shareFileIdStr.toUpperCase()) ||
+                           filesData.find(f => {
+                             const fIdStr = String(f.file_id)
+                             return fIdStr === shareFileIdStr ||
+                                    fIdStr.toLowerCase() === shareFileIdStr.toLowerCase() ||
+                                    f.file_id === share.file_id
+                           })
+              
+              if (fileData) {
+                share.files = fileData
+              } else {
+                // If file not found, log detailed warning for debugging
+                console.warn(`File not found for share_id ${share.share_id}, file_id ${share.file_id} (type: ${typeof share.file_id})`)
+                console.warn(`Available file_ids in map:`, Array.from(fileMap.keys()).slice(0, 5))
+                console.warn(`Files found:`, filesData.length, 'Expected:', fileIds.length)
+              }
+            })
+          } else {
+            console.warn('No files data returned for fileIds:', fileIds)
+            console.warn('This might be due to RLS policies. Check Supabase RLS settings for the files table.')
+          }
+        } else {
+          console.warn('No valid file_ids found in sharedToMe:', sharedToMe)
+        }
+      }
 
       setSharedWithMe(sharedToMe || [])
     } catch (err) {
@@ -235,55 +241,40 @@ export const SharedPage = () => {
     }
   }, [fetchData])
 
-  const handleShare = async ({ emails, permission, fileId, expiryDays }) => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-
-      const expiresAt = expiryDays > 0 
-        ? new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000).toISOString()
-        : null
-
-      // Get file name for activity log
-      const file = userFiles.find(f => f.file_id === fileId)
-      const fileName = file?.file_name || 'Unknown file'
-
-      // Create share records for each email
-      const shareRecords = emails.map(email => ({
-        file_id: fileId,
-        owner_id: user.id,
-        shared_with_email: email,
-        permission_level: permission,
-        expires_at: expiresAt
-      }))
-
-      const { error } = await supabase.from('shared_access').insert(shareRecords)
-      
-      if (error) {
-        console.error('Error sharing:', error)
-        return
-      }
-
-      // Log activity
-      await logActivity('share', fileName, fileId, { 
-        shared_with: emails, 
-        permission,
-        expires_in: expiryDays > 0 ? `${expiryDays} days` : 'never'
-      })
-
-      fetchData()
-      window.dispatchEvent(new Event('app:shared:updated'))
-      window.dispatchEvent(new Event('app:files:updated'))
-    } catch (err) {
-      console.error('Share error:', err)
-    }
+  // Handle share from ShareAccessModal (uploads file and creates share records)
+  // ShareAccessModal handles all the file upload and sharing logic internally
+  const handleShare = async ({ emails, file, fileId }) => {
+    // ShareAccessModal already handles:
+    // 1. File upload to Supabase Storage
+    // 2. File record creation in database
+    // 3. Share record creation in shared_access table
+    // 4. Activity logging
+    // So we just need to refresh the data
+    fetchData()
+    window.dispatchEvent(new Event('app:shared:updated'))
+    window.dispatchEvent(new Event('app:files:updated'))
   }
 
   const handleRevokeAccess = async (shareId, fileName) => {
     if (!window.confirm('Are you sure you want to revoke this access?')) return
     
     try {
+      // Get share details before deleting
+      const { data: shareData } = await supabase
+        .from('shared_access')
+        .select('shared_with_email, file_id')
+        .eq('share_id', shareId)
+        .single()
+      
       await supabase.from('shared_access').delete().eq('share_id', shareId)
+      
+      // Log revoke access action
+      if (shareData) {
+        await logActivity('revoke_share', fileName, shareData.file_id, { 
+          shared_with: shareData.shared_with_email 
+        })
+      }
+      
       fetchData()
       window.dispatchEvent(new Event('app:files:updated'))
     } catch (err) {
@@ -301,7 +292,10 @@ export const SharedPage = () => {
 
   const getFileUrl = (file) => {
     if (!file) return null
-    const { data } = supabase.storage.from(file.bucket).getPublicUrl(file.file_path)
+    // Handle both object and array cases
+    const fileData = Array.isArray(file) ? file[0] : file
+    if (!fileData || !fileData.bucket || !fileData.file_path) return null
+    const { data } = supabase.storage.from(fileData.bucket).getPublicUrl(fileData.file_path)
     return data?.publicUrl
   }
 
@@ -372,6 +366,12 @@ export const SharedPage = () => {
                   {sharedItems.map((item) => {
                     const daysRemaining = calculateDaysRemaining(item.expires_at)
                     const isExpired = daysRemaining === 0
+                    // Get file name - handle both object and array cases, and check multiple possible field names
+                    const fileData = Array.isArray(item.files) ? item.files[0] : item.files
+                    // Ensure we get the actual file name, not File ID or Unknown
+                    // Get file name - ensure we always have the actual file name
+                    const fileName = fileData?.file_name || fileData?.name || (item.files ? 'File name unavailable' : 'Loading...')
+                    const fileUrl = getFileUrl(fileData)
                     return (
                       <li key={item.share_id} className='px-6 py-4 hover:bg-slate-50 transition-colors duration-150'>
                         <div className='flex items-start justify-between'>
@@ -381,7 +381,7 @@ export const SharedPage = () => {
                             </div>
                             <div className='flex-1'>
                               <p className='font-semibold text-slate-800 mb-1'>
-                                {item.files?.file_name || 'Unknown file'}
+                                {fileName}
                               </p>
                               <p className='text-xs text-slate-500 flex items-center gap-3 flex-wrap'>
                                 <span>Shared with: {item.shared_with_email}</span>
@@ -408,13 +408,26 @@ export const SharedPage = () => {
                               </p>
                             </div>
                           </div>
-                          <button 
-                            onClick={() => handleRevokeAccess(item.share_id, item.files?.file_name)}
-                            className='p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors'
-                            title='Revoke access'
-                          >
-                            <Trash2 className='w-4 h-4' />
-                          </button>
+                          <div className='flex items-center gap-2'>
+                            {fileUrl && (
+                              <a
+                                href={fileUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className='p-2 text-slate-500 hover:bg-slate-100 rounded-lg transition-colors'
+                                title='View file'
+                              >
+                                <ExternalLink className='w-4 h-4' />
+                              </a>
+                            )}
+                            <button 
+                              onClick={() => handleRevokeAccess(item.share_id, fileName)}
+                              className='p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors'
+                              title='Revoke access'
+                            >
+                              <Trash2 className='w-4 h-4' />
+                            </button>
+                          </div>
                         </div>
                       </li>
                     )
@@ -432,7 +445,12 @@ export const SharedPage = () => {
                   {sharedWithMe.map((item) => {
                     const daysRemaining = calculateDaysRemaining(item.expires_at)
                     const isExpired = daysRemaining === 0
-                    const fileUrl = getFileUrl(item.files)
+                    // Get file data - handle both object and array cases
+                    const fileData = Array.isArray(item.files) ? item.files[0] : item.files
+                    // Ensure we get the actual file name, not File ID or Unknown
+                    // Get file name - ensure we always have the actual file name
+                    const fileName = fileData?.file_name || fileData?.name || (item.files ? 'File name unavailable' : 'Loading...')
+                    const fileUrl = getFileUrl(fileData)
                     
                     return (
                       <li key={item.share_id} className='px-6 py-4 hover:bg-slate-50 transition-colors duration-150'>
@@ -443,7 +461,7 @@ export const SharedPage = () => {
                             </div>
                             <div className='flex-1'>
                               <p className='font-semibold text-slate-800 mb-1'>
-                                {item.files?.file_name || 'Unknown file'}
+                                {fileName}
                               </p>
                               <p className='text-xs text-slate-500 flex items-center gap-3 flex-wrap'>
                                 <span>{item.permission_level} access</span>
@@ -475,24 +493,48 @@ export const SharedPage = () => {
                           </div>
                           {!isExpired && fileUrl && (
                             <div className='flex items-center gap-2'>
-                              {item.permission_level !== 'View' && (
-                                <a 
-                                  href={fileUrl}
-                                  download
-                                  className='px-3 py-1.5 text-sm bg-[#7A1C1C] text-white rounded-lg hover:bg-[#5a1515] transition-colors'
-                                >
-                                  Download
-                                </a>
-                              )}
+                              {/* Always show View button for all permission levels */}
                               <a
                                 href={fileUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className='p-2 text-slate-500 hover:bg-slate-100 rounded-lg transition-colors'
-                                title='Open in new tab'
+                                onClick={async () => {
+                                  // Log view action for shared files
+                                  try {
+                                    await logActivity('view', fileName, fileData?.file_id, { 
+                                      source: 'shared_file',
+                                      shared_by: item.owner_id
+                                    })
+                                  } catch (activityError) {
+                                    console.warn('Failed to log view activity (non-critical):', activityError)
+                                  }
+                                }}
+                                className='px-3 py-1.5 text-sm bg-[#7A1C1C] text-white rounded-lg hover:bg-[#5a1515] transition-colors'
+                                title='View file'
                               >
-                                <ExternalLink className='w-4 h-4' />
+                                View
                               </a>
+                              {/* Show Download button for non-View permissions */}
+                              {item.permission_level !== 'View' && (
+                                <a 
+                                  href={fileUrl}
+                                  download={fileName}
+                                  onClick={async () => {
+                                    // Log download action for shared files
+                                    try {
+                                      await logActivity('download', fileName, fileData?.file_id, { 
+                                        source: 'shared_file',
+                                        shared_by: item.owner_id
+                                      })
+                                    } catch (activityError) {
+                                      console.warn('Failed to log download activity (non-critical):', activityError)
+                                    }
+                                  }}
+                                  className='px-3 py-1.5 text-sm bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition-colors'
+                                >
+                                  Download
+                                </a>
+                              )}
                             </div>
                           )}
                         </div>
@@ -507,10 +549,9 @@ export const SharedPage = () => {
       </section>
 
       {showShareModal && (
-        <ShareModal 
+        <ShareAccessModal 
           onClose={() => setShowShareModal(false)} 
           onShare={handleShare}
-          userFiles={userFiles}
         />
       )}
     </div>

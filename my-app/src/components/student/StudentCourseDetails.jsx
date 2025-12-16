@@ -25,12 +25,12 @@ export const StudentCourseDetails = () => {
       try {
         const { data, error } = await supabase
           .from('courses')
-          .select('id,subject_code,subject_name,enrolled_students,schedule')
-          .eq('id', courseId)
+          .select('course_id,subject_code,subject_name,enrolled_students,schedule')
+          .eq('course_id', courseId)
           .single()
         if (!error && data) {
           foundCourse = {
-            id: data.id,
+            id: data.course_id,
             subjectCode: data.subject_code,
             subjectName: data.subject_name,
             enrolledStudents: data.enrolled_students || 0,

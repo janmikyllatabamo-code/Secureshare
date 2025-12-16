@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { X, BookOpen, Copy, Check } from 'lucide-react'
+import { X, BookOpen } from 'lucide-react'
 
 export const AddCourseModal = ({ onClose, onSave }) => {
   const [courseCode, setCourseCode] = useState('')
@@ -7,11 +7,9 @@ export const AddCourseModal = ({ onClose, onSave }) => {
   const [selectedDays, setSelectedDays] = useState([])
   const [startTime, setStartTime] = useState('')
   const [endTime, setEndTime] = useState('')
-  const [enrollmentLink, setEnrollmentLink] = useState('')
-  const [linkCopied, setLinkCopied] = useState(false)
   const [error, setError] = useState('')
 
-  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
   const toggleDay = (day) => {
     setSelectedDays(prev => 
@@ -19,39 +17,6 @@ export const AddCourseModal = ({ onClose, onSave }) => {
         ? prev.filter(d => d !== day)
         : [...prev, day]
     )
-  }
-
-  const generateLink = () => {
-    if (!courseCode || !courseName) {
-      setError('Please fill in Course Code and Course Name first')
-      return
-    }
-    
-    // Generate a mock enrollment link
-    const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost'
-    const link = `${origin}/enroll/${courseCode.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}`
-    setEnrollmentLink(link)
-    setError('')
-  }
-
-  const copyLink = async () => {
-    if (!enrollmentLink) return
-    
-    try {
-      await navigator.clipboard.writeText(enrollmentLink)
-      setLinkCopied(true)
-      setTimeout(() => setLinkCopied(false), 2000)
-    } catch (err) {
-      // Fallback for older browsers
-      const textArea = document.createElement('textarea')
-      textArea.value = enrollmentLink
-      document.body.appendChild(textArea)
-      textArea.select()
-      document.execCommand('copy')
-      document.body.removeChild(textArea)
-      setLinkCopied(true)
-      setTimeout(() => setLinkCopied(false), 2000)
-    }
   }
 
   const handleSubmit = () => {
@@ -79,8 +44,7 @@ export const AddCourseModal = ({ onClose, onSave }) => {
           days: selectedDays,
           startTime,
           endTime
-        },
-        enrollmentLink
+        }
       })
     }
     if (onClose) onClose()
@@ -188,53 +152,6 @@ export const AddCourseModal = ({ onClose, onSave }) => {
                   onChange={(e) => setEndTime(e.target.value)}
                   className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#7A1C1C] focus:border-transparent outline-none"
                 />
-              </div>
-            </div>
-
-            {/* Enrollment Link Generator */}
-            <div>
-              <label className='block text-sm font-semibold text-slate-700 mb-2'>
-                Enrollment Link
-              </label>
-              <div className='space-y-3'>
-                <button
-                  type="button"
-                  onClick={generateLink}
-                  className='w-full px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg transition-colors'
-                >
-                  Generate Enrollment Link
-                </button>
-                {enrollmentLink && (
-                  <div className='flex items-center gap-2'>
-                    <input
-                      type="text"
-                      value={enrollmentLink}
-                      readOnly
-                      className="flex-1 px-4 py-2 border border-slate-300 rounded-lg bg-slate-50 text-sm"
-                    />
-                    <button
-                      type="button"
-                      onClick={copyLink}
-                      className={`px-4 py-2 rounded-lg font-semibold text-sm transition-colors flex items-center gap-2 ${
-                        linkCopied
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-[#7A1C1C] hover:bg-[#5a1515] text-white'
-                      }`}
-                    >
-                      {linkCopied ? (
-                        <>
-                          <Check className='w-4 h-4' />
-                          Copied
-                        </>
-                      ) : (
-                        <>
-                          <Copy className='w-4 h-4' />
-                          Copy Link
-                        </>
-                      )}
-                    </button>
-                  </div>
-                )}
               </div>
             </div>
           </div>

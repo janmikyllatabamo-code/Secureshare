@@ -1,11 +1,12 @@
 // Teacher Homepage - Identical to Student Portal Homepage
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { FileUpload } from '../portal/FileUpload'
 import { CreateFolderModal } from '../portal/CreateFolderModal'
 import { ShareAccessModal } from '../portal/ShareAccessModal'
 import { SecuritySettingsModal } from '../portal/SecuritySettingsModal'
 import { Upload, FolderPlus, Share2, Settings, FileText, Clock, Download, Users, TrendingUp } from 'lucide-react'
+import { supabase } from '../../lib/supabase'
 
 export const TeacherHomepage = () => {
   // State to control upload modal visibility
@@ -31,47 +32,100 @@ export const TeacherHomepage = () => {
     }
   }, []);
 
-  useEffect(() => {
-    const refresh = () => {
-      const authUserRaw = localStorage.getItem('authUser')
-      const authUser = authUserRaw ? JSON.parse(authUserRaw) : { role: 'Teacher', email: '' }
-      const key = authUser.role === 'Teacher' ? 'Teacher' : (authUser.email || 'Student')
-      const filesKey = `files:list:${key}`
-      const sharedKey = `shared:list:${key}`
-      const downloadsKey = `downloads:count:${key}`
-      const filesStored = localStorage.getItem(filesKey)
-      const sharedStored = localStorage.getItem(sharedKey)
-      const downloadsStored = localStorage.getItem(downloadsKey)
-      const filesList = filesStored ? JSON.parse(filesStored) : []
-      const sharedList = sharedStored ? JSON.parse(sharedStored) : []
-      const downloaded = downloadsStored ? Number(downloadsStored) : 0
-      setStats({ totalFiles: filesList.length, uploaded: filesList.length, downloaded, sharedWith: sharedList.length })
-      const parsed = filesList.map(f => ({ ...f, updatedAt: new Date(f.updatedAt) }))
-      parsed.sort((a, b) => (b.updatedAt) - (a.updatedAt))
-      setRecentFiles(parsed.slice(0, 8))
-    }
-    refresh()
-    const onFiles = () => refresh()
-    const onShared = () => refresh()
-    window.addEventListener('app:files:updated', onFiles)
-    window.addEventListener('app:shared:updated', onShared)
-    return () => {
-      window.removeEventListener('app:files:updated', onFiles)
-      window.removeEventListener('app:shared:updated', onShared)
+  // Fetch dashboard data from Supabase
+  const fetchDashboardData = useCallback(async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      // Fetch total files count
+      const { count: totalFiles } = await supabase
+        .from('files')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('is_trashed', false)
+
+      // Fetch folders count
+      const { count: folders } = await supabase
+        .from('files')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('is_trashed', false)
+        .eq('is_folder', true)
+
+      // Fetch shared files count
+      const { count: shared } = await supabase
+        .from('shared_access')
+        .select('*', { count: 'exact', head: true })
+        .eq('owner_id', user.id)
+
+      // Fetch download count from activity_log
+      const { count: downloaded } = await supabase
+        .from('activity_log')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('action_type', 'download')
+
+      setStats({
+        totalFiles: totalFiles || 0,
+        uploaded: totalFiles || 0,
+        downloaded: downloaded || 0,
+        sharedWith: shared || 0
+      })
+
+      // Fetch recent files
+      const { data: recent, error: recentError } = await supabase
+        .from('files')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('is_trashed', false)
+        .eq('is_folder', false)
+        .order('created_at', { ascending: false })
+        .limit(8)
+
+      if (recentError) {
+        console.error('Error fetching recent files:', recentError)
+      }
+
+      if (recent) {
+        const transformedFiles = recent.map(file => {
+          const nameParts = file.file_name.split('.')
+          const ext = nameParts.length > 1 ? nameParts.pop() : ''
+          const name = nameParts.join('.')
+          const { data: urlData } = supabase.storage.from(file.bucket).getPublicUrl(file.file_path)
+          
+          return {
+            id: file.file_id,
+            name: name,
+            ext: ext.toLowerCase(),
+            sizeMB: file.file_size / (1024 * 1024),
+            updatedAt: new Date(file.updated_at),
+            url: urlData?.publicUrl || ''
+          }
+        })
+        setRecentFiles(transformedFiles)
+      }
+    } catch (err) {
+      console.error('Error fetching dashboard data:', err)
     }
   }, [])
 
   useEffect(() => {
-    const authUserRaw = localStorage.getItem('authUser')
-    const authUser = authUserRaw ? JSON.parse(authUserRaw) : { role: 'Teacher', email: '' }
-    const key = authUser.role === 'Teacher' ? 'Teacher' : (authUser.email || 'Student')
-    const filesKey = `files:list:${key}`
-    const stored = localStorage.getItem(filesKey)
-    const list = stored ? JSON.parse(stored) : []
-    const parsed = list.map(f => ({ ...f, updatedAt: new Date(f.updatedAt) }))
-    parsed.sort((a, b) => (b.updatedAt) - (a.updatedAt))
-    setRecentFiles(parsed.slice(0, 8))
-  }, [])
+    fetchDashboardData()
+  }, [fetchDashboardData])
+
+  // Listen for file updates
+  useEffect(() => {
+    const handleFilesUpdated = () => {
+      fetchDashboardData()
+    }
+    window.addEventListener('app:files:updated', handleFilesUpdated)
+    window.addEventListener('app:shared:updated', handleFilesUpdated)
+    return () => {
+      window.removeEventListener('app:files:updated', handleFilesUpdated)
+      window.removeEventListener('app:shared:updated', handleFilesUpdated)
+    }
+  }, [fetchDashboardData])
 
   const formatRelative = (date) => {
     const now = new Date()
@@ -267,28 +321,55 @@ export const TeacherHomepage = () => {
         <FileUpload onClose={() => setShowUploadModal(false)} />
       )}
       {showCreateFolderModal && (
-        <CreateFolderModal onClose={() => setShowCreateFolderModal(false)} onCreate={(folderName) => {
-          const authUserRaw = localStorage.getItem('authUser')
-          const authUser = authUserRaw ? JSON.parse(authUserRaw) : { role: 'Teacher', email: '' }
-          const key = authUser.role === 'Teacher' ? 'Teacher' : (authUser.email || 'Student')
-          const filesKey = `files:list:${key}`
-          const stored = localStorage.getItem(filesKey)
-          const list = stored ? JSON.parse(stored) : []
-          const now = new Date().toISOString()
-          const id = Date.now()
-          const fullPath = `${folderName}-${id}`
-          const newFolder = { id, name: folderName, ext: 'folder', sizeMB: 0, updatedAt: now, fullPath, parentPath: '' }
-          localStorage.setItem(filesKey, JSON.stringify([newFolder, ...list]))
-          const notifKey = key ? `notifications:${key}` : 'notifications:Student'
-          const nStored = localStorage.getItem(notifKey)
-          const nList = nStored ? JSON.parse(nStored) : []
-          const notif = { title: 'Folder created', message: `${folderName} created`, time: 'just now', read: false }
-          localStorage.setItem(notifKey, JSON.stringify([notif, ...nList]))
-          window.dispatchEvent(new Event('app:files:updated'))
+        <CreateFolderModal onClose={() => setShowCreateFolderModal(false)} onCreate={async (folderName) => {
+          try {
+            const { data: { user } } = await supabase.auth.getUser()
+            if (!user) {
+              console.error('User not authenticated')
+              return
+            }
+
+            // Use the create_folder function to create folder in database
+            const { data: folderRecord, error: folderError } = await supabase.rpc('create_folder', {
+              p_user_id: user.id,
+              p_folder_name: folderName,
+              p_parent_folder_path: '', // Root level folder
+              p_bucket: 'files'
+            })
+
+            if (folderError) {
+              console.error('Error creating folder:', folderError)
+              alert(`Failed to create folder: ${folderError.message}`)
+              return
+            }
+
+            // Log activity
+            try {
+              await supabase.from('activity_log').insert({
+                user_id: user.id,
+                action_type: 'create_folder',
+                file_name: folderName,
+                file_id: folderRecord?.file_id || null,
+                details: { 
+                  folder_path: folderRecord?.file_path || '',
+                  parent: 'root'
+                }
+              })
+            } catch (activityError) {
+              console.warn('Failed to log activity (non-critical):', activityError)
+            }
+
+            // Refresh dashboard and dispatch event
+            fetchDashboardData()
+            window.dispatchEvent(new Event('app:files:updated'))
+          } catch (err) {
+            console.error('Create folder error:', err)
+            alert(`Failed to create folder: ${err.message}`)
+          }
         }} />
       )}
       {showShareAccessModal && (
-        <ShareAccessModal onClose={() => setShowShareAccessModal(false)} onShare={({ emails, role, file }) => {
+        <ShareAccessModal onClose={() => setShowShareAccessModal(false)} onShare={({ emails, file }) => {
           const authUserRaw = localStorage.getItem('authUser')
           const authUser = authUserRaw ? JSON.parse(authUserRaw) : { role: 'Teacher', email: '' }
           const key = authUser.role === 'Teacher' ? 'Teacher' : (authUser.email || 'Student')
@@ -307,7 +388,6 @@ export const TeacherHomepage = () => {
             sharedBy: authUser.email || 'You',
             sharedDate: 'today',
             recipients: emails,
-            role,
             expiryDate: expiry.toISOString()
           }
           localStorage.setItem(sharedKey, JSON.stringify([item, ...list]))
