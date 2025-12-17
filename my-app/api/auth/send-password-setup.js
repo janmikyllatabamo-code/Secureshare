@@ -36,6 +36,14 @@ module.exports = async function handler(req, res) {
             return res.status(400).json({ error: 'Only @tup.edu.ph emails are allowed' });
         }
 
+        // Initialize admin client
+        const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
+            auth: {
+                autoRefreshToken: false,
+                persistSession: false
+            }
+        });
+
         // Generate password recovery link (this is what allows setting up a password)
         // This will ALSO send an email if Supabase SMTP is configured correctly
         const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
