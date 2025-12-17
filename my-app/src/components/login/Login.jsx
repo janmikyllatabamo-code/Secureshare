@@ -565,7 +565,8 @@ const Login = () => {
 
         // sessionToUse is declared at line 251 in the same scope (if (code || hasErrorParam) block)
         // eslint-disable-next-line no-undef
-        if (sessionToUse && sessionToUse.user) {
+        const sessionToUseFinal = typeof sessionToUse !== 'undefined' ? sessionToUse : null;
+        if (sessionToUseFinal && sessionToUseFinal.user) {
           // Clear any error if we successfully got a session
           if (hasErrorParam) {
             setError('');
@@ -574,14 +575,14 @@ const Login = () => {
           isProcessing = true;
           // CRITICAL: Check email confirmation BEFORE processing session
           // eslint-disable-next-line no-undef
-          const isGoogleAuth = sessionToUse.user.app_metadata?.provider === 'google' ||
+          const isGoogleAuth = sessionToUseFinal.user.app_metadata?.provider === 'google' ||
             // eslint-disable-next-line no-undef
-            sessionToUse.user.identities?.some(identity => identity.provider === 'google');
+            sessionToUseFinal.user.identities?.some(identity => identity.provider === 'google');
 
           if (isGoogleAuth) {
             // Validate email domain
             // eslint-disable-next-line no-undef
-            if (!isValidTUPEmail(sessionToUse.user.email)) {
+            if (!isValidTUPEmail(sessionToUseFinal.user.email)) {
               await supabase.auth.signOut();
               localStorage.removeItem('authUser');
               setError('Only @tup.edu.ph email addresses are allowed for Google sign-in.');
@@ -593,10 +594,10 @@ const Login = () => {
 
             // Skip email confirmation for Google OAuth with valid @tup.edu.ph domain
             // eslint-disable-next-line no-undef
-            const skipConfirmation = isGoogleAuth && isValidTUPEmail(sessionToUse.user.email);
+            const skipConfirmation = isGoogleAuth && isValidTUPEmail(sessionToUseFinal.user.email);
 
             // eslint-disable-next-line no-undef
-            if (!skipConfirmation && !isEmailConfirmed(sessionToUse.user)) {
+            if (!skipConfirmation && !isEmailConfirmed(sessionToUseFinal.user)) {
               // Sign out IMMEDIATELY to prevent any auto-login
               await supabase.auth.signOut();
               localStorage.removeItem('authUser');
@@ -604,12 +605,12 @@ const Login = () => {
               // Send confirmation email automatically
               try {
                 // eslint-disable-next-line no-undef
-                console.log('Sending confirmation email to:', sessionToUse.user.email);
+                console.log('Sending confirmation email to:', sessionToUseFinal.user.email);
                 // eslint-disable-next-line no-undef
-                const result = await sendOAuthConfirmationEmail(sessionToUse.user.email);
+                const result = await sendOAuthConfirmationEmail(sessionToUseFinal.user.email);
                 if (result.success) {
                   // eslint-disable-next-line no-undef
-                  setError(`✅ A confirmation email has been sent to ${sessionToUse.user.email}. Please check your email (including spam folder) and click the confirmation link to complete your sign-in. You cannot access the dashboard until you confirm your email.`);
+                  setError(`✅ A confirmation email has been sent to ${sessionToUseFinal.user.email}. Please check your email (including spam folder) and click the confirmation link to complete your sign-in. You cannot access the dashboard until you confirm your email.`);
                 } else {
                   console.error('Failed to send confirmation email:', result.error);
                   if (result.confirmationLink) {
@@ -617,16 +618,16 @@ const Login = () => {
                     console.log('🔗 Full confirmation link:', result.confirmationLink);
                   } else if (result.requiresDashboardConfig) {
                     // eslint-disable-next-line no-undef
-                    setError(`⚠️ Email confirmations are not enabled in Supabase Dashboard. Please enable them in Authentication > Email > "Confirm sign up" and configure SMTP. Your email: ${sessionToUse.user.email}. Error: ${result.error}`);
+                    setError(`⚠️ Email confirmations are not enabled in Supabase Dashboard. Please enable them in Authentication > Email > "Confirm sign up" and configure SMTP. Your email: ${sessionToUseFinal.user.email}. Error: ${result.error}`);
                   } else {
                     // eslint-disable-next-line no-undef
-                    setError(`Please confirm your email address (${sessionToUse.user.email}) before signing in. Error: ${result.error}. Please check your Supabase Dashboard settings to enable email confirmations.`);
+                    setError(`Please confirm your email address (${sessionToUseFinal.user.email}) before signing in. Error: ${result.error}. Please check your Supabase Dashboard settings to enable email confirmations.`);
                   }
                 }
               } catch (err) {
                 console.error('Error sending confirmation email:', err);
                 // eslint-disable-next-line no-undef
-                setError(`Please confirm your email address (${sessionToUse.user.email}) before signing in. Error: ${err.message}. Make sure email confirmations are enabled in Supabase Dashboard.`);
+                setError(`Please confirm your email address (${sessionToUseFinal.user.email}) before signing in. Error: ${err.message}. Make sure email confirmations are enabled in Supabase Dashboard.`);
               }
 
               setGoogleLoading(false);
@@ -639,7 +640,7 @@ const Login = () => {
 
           // Only proceed if email is confirmed (or not Google OAuth)
           // eslint-disable-next-line no-undef
-          await handleUserSession(sessionToUse.user);
+          await handleUserSession(sessionToUseFinal.user);
           isProcessing = false;
           // eslint-enable no-undef
         } else {
