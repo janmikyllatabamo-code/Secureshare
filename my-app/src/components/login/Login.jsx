@@ -9,6 +9,7 @@ import { supabaseAdmin } from '../../lib/supabaseAdmin';
 import MFAEnrollment from './MFAEnrollment';
 import MFAVerification from './MFAVerification';
 import { sendOAuthConfirmationEmail, isEmailConfirmed, isValidTUPEmail } from '../../utils/emailConfirmation';
+import { sendPasswordSetupEmail, isNewGoogleOAuthUser, wasPasswordSetupEmailSent } from '../../utils/passwordSetup';
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -117,6 +118,19 @@ const Login = () => {
               }
             } else if (skipConfirmation) {
               console.log('✅ Google OAuth with @tup.edu.ph - skipping email confirmation');
+
+              // Send password setup email for new Google OAuth users
+              // This allows them to set up a password for manual email/password login
+              if (isNewGoogleOAuthUser(session.user) && !wasPasswordSetupEmailSent(session.user.id)) {
+                console.log('📧 Sending password setup email to new Google OAuth user:', userEmail);
+                sendPasswordSetupEmail(userEmail, session.user.id).then(result => {
+                  if (result.success && !result.alreadySent) {
+                    console.log('✅ Password setup email sent successfully!');
+                  }
+                }).catch(err => {
+                  console.error('Failed to send password setup email:', err);
+                });
+              }
             }
           } else {
             console.log('⚠️  No email found in Google OAuth response in onAuthStateChange');
