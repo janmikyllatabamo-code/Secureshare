@@ -36,45 +36,25 @@ module.exports = async function handler(req, res) {
             return res.status(400).json({ error: 'Only @tup.edu.ph emails are allowed' });
         }
 
-        // Initialize admin client
-        const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
-            auth: {
-                autoRefreshToken: false,
-                persistSession: false
-            }
+        // Use resetPasswordForEmail to trigger Supabase to SEND the email
+        // (admin.generateLink only creates the link but doesn't send it)
+        const { data, error: resetError } = await supabaseAdmin.auth.resetPasswordForEmail(email, {
+            redirectTo: `${req.headers.origin || 'https://secureshare-ten.vercel.app'}/login?password_setup=true`
         });
 
-        // Generate password recovery link (this is what allows setting up a password)
-        const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
-            type: 'recovery',
-            email: email,
-            options: {
-                redirectTo: `${req.headers.origin || 'https://secureshare-ten.vercel.app'}/login?password_setup=true`
-            }
-        });
-
-        if (linkError) {
-            console.error('Error generating password setup link:', linkError);
+        if (resetError) {
+            console.error('Error sending password setup email:', resetError);
             return res.status(500).json({
-                error: 'Failed to generate password setup link',
-                details: linkError.message
+                error: 'Failed to send password setup email',
+                details: resetError.message
             });
         }
-
-        // The generateLink with type 'recovery' should automatically send an email
-        // if email confirmations are properly configured in Supabase
-
-        // If we got a link, try to send it via Supabase's built-in email
-        // Note: Supabase's recovery email will be sent automatically if SMTP is configured
-
-        console.log('Password setup link generated for:', email);
-        console.log('Link (first 100 chars):', linkData?.properties?.action_link?.substring(0, 100));
 
         return res.status(200).json({
             success: true,
             message: 'Password setup email sent',
-            // Always return the link so frontend can display it if email delivery fails
-            passwordSetupLink: linkData?.properties?.action_link
+            // Note: We cannot get the link back when using resetPasswordForEmail (for security)
+            // So console display of the link will no longer be possible, which is what the user wants (email delivery)
         });
 
     } catch (error) {
