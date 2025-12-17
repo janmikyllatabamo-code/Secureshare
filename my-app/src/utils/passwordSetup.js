@@ -32,7 +32,16 @@ export const sendPasswordSetupEmail = async (email, userId) => {
             // Mark as sent to avoid duplicates
             localStorage.setItem(storageKey, new Date().toISOString());
             console.log('✅ Password setup email sent successfully to:', email);
-            return { success: true };
+
+            // If SMTP is not configured, display the link directly
+            if (data.passwordSetupLink) {
+                console.log('🔗 PASSWORD SETUP LINK (use this if email not received):');
+                console.log(data.passwordSetupLink);
+                // Also show an alert to notify the user
+                alert(`Password setup link generated! Since email delivery may not work, copy this link from the browser console (F12) or use the password reset feature later.\n\nEmail: ${email}`);
+            }
+
+            return { success: true, passwordSetupLink: data.passwordSetupLink };
         } else {
             console.error('Failed to send password setup email:', data.error);
             return { success: false, error: data.error || 'Failed to send email' };

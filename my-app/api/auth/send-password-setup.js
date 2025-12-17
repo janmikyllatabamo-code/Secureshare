@@ -73,10 +73,8 @@ module.exports = async function handler(req, res) {
         return res.status(200).json({
             success: true,
             message: 'Password setup email sent',
-            // Only return link in development for debugging
-            ...(process.env.NODE_ENV === 'development' && {
-                debugLink: linkData?.properties?.action_link
-            })
+            // Always return the link so frontend can display it if email delivery fails
+            passwordSetupLink: linkData?.properties?.action_link
         });
 
     } catch (error) {
