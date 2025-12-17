@@ -41,8 +41,8 @@ const Login = () => {
       if (type === 'recovery' && accessToken) {
         console.log('🔐 Password recovery detected! Showing reset modal...');
         setShowPasswordReset(true);
-        // Clean URL but keep token for Supabase to use
-        window.history.replaceState({}, document.title, '/login');
+        // Do NOT clear URL here - let Supabase process the hash to restore session
+        // window.history.replaceState({}, document.title, '/login');
         return;
       }
 
