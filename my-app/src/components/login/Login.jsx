@@ -826,7 +826,7 @@ const Login = () => {
           console.error('Error creating MFA challenge:', challengeError);
           // Continue with normal flow if challenge fails
         } else if (challenge) {
-          setMfaChallenge(challenge);
+          // setMfaChallenge(challenge); // Removed - MFA now handled via API routes
           setPendingUser(user);
           setShowMFAVerification(true);
           return;
