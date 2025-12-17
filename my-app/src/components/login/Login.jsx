@@ -21,6 +21,7 @@ const Login = () => {
   const [showMFAEnrollment, setShowMFAEnrollment] = useState(false);
   const [showMFAVerification, setShowMFAVerification] = useState(false);
   const [showPasswordReset, setShowPasswordReset] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(false);
   const [pendingUser, setPendingUser] = useState(null);
   const navigate = useNavigate();
 
@@ -58,6 +59,15 @@ const Login = () => {
         if (confirmedSession && confirmedSession.user) {
           // Check if email is confirmed
           if (confirmedSession.user.email_confirmed_at) {
+
+            // IF password_setup is true, show the modal instead of redirecting
+            if (isPasswordSetup) {
+              console.log('📝 Email confirmed for new signup! Showing password setup modal...');
+              setShowPasswordReset(true);
+              // Do NOT clear URL yet, let the modal do it
+              return;
+            }
+
             console.log('✅ Email confirmed! Redirecting to student dashboard...');
             // Clear the hash to clean up URL
             window.history.replaceState({}, document.title, '/portal');
@@ -1159,6 +1169,60 @@ const Login = () => {
     }
   };
 
+  /* 
+   * Handle Manual Sign Up
+   * Triggers the "Password Setup" flow via Supabase signUp
+   */
+  const handleSignUp = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+
+    if (!email) {
+      setError("Please enter your email address");
+      setLoading(false);
+      return;
+    }
+
+    // Basic email validation
+    if (!email.includes('@')) {
+      setError("Please enter a valid email address");
+      setLoading(false);
+      return;
+    }
+
+    try {
+      // Create user with a temporary random password
+      // The confirmation email will contain a link that redirects back to /login?password_setup=true
+      // This allows the user to set their OWN password after confirming email
+      const tempPassword = crypto.randomUUID();
+
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password: tempPassword,
+        options: {
+          emailRedirectTo: `${window.location.origin}/login?password_setup=true`
+        }
+      });
+
+      if (error) throw error;
+
+      if (data?.user?.identities?.length === 0) {
+        setError('This email is already registered. Please sign in instead.');
+      } else {
+        setError(`✅ Confirmation email sent to ${email}! Please check your inbox and click the link to verify your account and set your password.`);
+      }
+
+    } catch (err) {
+      console.error('Sign up error:', err);
+      setError(err.message || "Failed to sign up");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const currentHandleSubmit = isSignUp ? handleSignUp : handleSubmit;
+
   return (
     <div className='bg-radial-at-center from-[#F9F0D9] to-[#F2F2F2] min-h-screen'>
       <Navbar />
@@ -1208,46 +1272,123 @@ const Login = () => {
                 <div className='bg-gradient-to-br from-[#7A1C1C] to-[#9B2D2D] p-2.5 rounded-lg shadow-lg'>
                   <ShieldCheck className="text-white w-8 h-8" />
                 </div>
-                <h1 className="text-xl font-bold text-[#7A1C1C]">Welcome to SecureShare</h1>
+                <h2 className="text-3xl font-bold mb-2 text-[#7A1C1C]">
+                  {isSignUp ? "Create an Account" : "Access your student portal"}
+                </h2>
+                <p className="text-sm font-light text-[#4B1B1B]">
+                  {isSignUp ? "Sign up to start sharing files securely" : "Secure file sharing for academic excellence"}
+                </p>
               </div>
 
-              <p className="font-light text-sm mb-6">
-                Sign in to access your secure academic files
-              </p>
+              <div className="flex bg-black/20 p-1 rounded-lg mb-6 backdrop-blur-sm">
+                <button
+                  onClick={() => { setIsSignUp(false); setError(""); }}
+                  className={`flex-1 py-2 rounded-md text-sm font-medium transition-all ${!isSignUp
+                    ? 'bg-white text-[#7A1C1C] shadow-lg'
+                    : 'text-white hover:bg-white/10'
+                    }`}
+                >
+                  Sign In
+                </button>
+                <button
+                  onClick={() => { setIsSignUp(true); setError(""); }}
+                  className={`flex-1 py-2 rounded-md text-sm font-medium transition-all ${isSignUp
+                    ? 'bg-white text-[#7A1C1C] shadow-lg'
+                    : 'text-white hover:bg-white/10'
+                    }`}
+                >
+                  Sign Up
+                </button>
+              </div>
 
-              {error && (
-                <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg text-sm">
-                  {error}
-                </div>
-              )}
+              {/* Login/Signup Form */}
+              <div className="bg-white/10 backdrop-blur-md rounded-xl p-8 border border-white/20 shadow-2xl">
+                {error && (
+                  <div className={`p-4 rounded-lg mb-6 flex items-start space-x-3 ${error.startsWith('✅')
+                    ? 'bg-green-500/20 border border-green-500/30 text-green-100'
+                    : 'bg-red-500/20 border border-red-500/30 text-red-100'
+                    }`}>
+                    <div className="mt-1">
+                      {error.startsWith('✅') ? (
+                        <ShieldCheck className="w-5 h-5 flex-shrink-0" />
+                      ) : (
+                        <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                      )}
+                    </div>
+                    <span className="text-sm">{error}</span>
+                  </div>
+                )}
 
-              <div className="w-full max-w-xs mx-auto">
-                <label className="flex justify-start text-sm font-semibold text-[#7A1C1C] mb-1">
-                  Email
-                </label>
-                <div className="text-sm flex items-center h-10 border border-gray-400 rounded-lg px-3 mb-4">
-                  <Mail size={20} color="#7A1C1C" className="mr-2" />
-                  <input
-                    type="email"
-                    placeholder="student@university.edu"
-                    className="w-full outline-none bg-transparent"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                  />
-                </div>
+                <form onSubmit={currentHandleSubmit} className="space-y-5">
+                  <div>
+                    <label className="block text-sm font-medium text-red-100 mb-1.5 ml-1">
+                      Email Address
+                    </label>
+                    <div className="relative group">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <Mail className="h-5 w-5 text-red-200 group-focus-within:text-white transition-colors" />
+                      </div>
+                      <input
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="block w-full pl-10 pr-3 py-2.5 bg-white/10 border border-white/10 rounded-lg text-white placeholder-red-200/50 focus:outline-none focus:ring-2 focus:ring-white/50 focus:border-transparent transition-all"
+                        placeholder="Enter your email"
+                        required
+                      />
+                    </div>
+                  </div>
 
-                <label className="flex justify-start text-sm font-semibold text-[#7A1C1C] mb-1">
-                  Password
-                </label>
-                <div className="text-sm flex items-center h-10 border border-gray-400 rounded-lg px-3 mb-4">
-                  <Lock size={20} color="#7A1C1C" className='mr-2' />
-                  <input
-                    type="password"
-                    placeholder="Enter your password"
-                    className="w-full outline-none bg-transparent"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                  />
+                  {/* Password field is always shown for sign-up, and for sign-in */}
+                  <div>
+                    <label className="block text-sm font-medium text-red-100 mb-1.5 ml-1">
+                      Password
+                    </label>
+                    <div className="relative group">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <Lock className="h-5 w-5 text-red-200 group-focus-within:text-white transition-colors" />
+                      </div>
+                      <input
+                        type="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="block w-full pl-10 pr-3 py-2.5 bg-white/10 border border-white/10 rounded-lg text-white placeholder-red-200/50 focus:outline-none focus:ring-2 focus:ring-white/50 focus:border-transparent transition-all"
+                        placeholder="Enter your password"
+                        required
+                      />
+                    </div>
+                  </div>
+
+
+                  <button
+                    type="submit"
+                    disabled={loading || googleLoading}
+                    className="w-full flex items-center justify-center py-3 px-4 border border-transparent rounded-lg text-sm font-bold text-[#7A1C1C] bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#7A1C1C] focus:ring-white transition-all transform hover:scale-[1.02] shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {loading ? (
+                      <div className="w-5 h-5 border-2 border-[#7A1C1C] border-t-transparent rounded-full animate-spin"></div>
+                    ) : (
+                      <>
+                        {isSignUp ? "Sign Up" : "Sign in"}
+                        <svg className="ml-2 -mr-1 w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
+                        </svg>
+                      </>
+                    )}
+                  </button>
+                </form>
+
+                <div className="relative my-6">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-white/40"></div>
+                  </div>
+                  <div className="relative flex justify-center">
+                    <span className="bg-white/40 backdrop-blur-xl px-3 py-0.5 text-xs font-medium text-[#4B1B1B]/70 uppercase tracking-wide">
+                      {isSignUp ? "Or sign up with" : "Or sign in with"}
+                    </span>
+                  </div>
                 </div>
 
                 {/* Google Sign In Button */}
@@ -1286,25 +1427,12 @@ const Login = () => {
                   )}
                 </button>
 
-                {/* Divider */}
-                <div className="relative mb-4">
-                  <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t border-white/40"></div>
-                  </div>
-                  <div className="relative flex justify-center">
-                    <span className="bg-white/40 backdrop-blur-xl px-3 py-0.5 text-xs font-medium text-[#4B1B1B]/70 uppercase tracking-wide">Or</span>
-                  </div>
-                </div>
-
                 <button
-                  onClick={handleSubmit}
-                  disabled={loading || googleLoading}
-                  className="text-sm w-full bg-[#7A1C1C] hover:bg-[#5a1515] text-white font-semibold py-2.5 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={() => setShowPasswordReset(true)}
+                  className="text-sm text-[#7A1C1C] hover:underline mt-4"
                 >
-                  {loading ? "Loading..." : "Sign In"}
+                  Forgot password?
                 </button>
-
-
               </div>
             </div>
           </div>
