@@ -22,16 +22,10 @@ export default async function handler(req, res) {
             return res.status(401).json({ success: false, error: authError });
         }
 
-        // Check if this is a Google OAuth user - they shouldn't use MFA
-        const isGoogleAuth = user.app_metadata?.provider === 'google' ||
-            user.identities?.some(identity => identity.provider === 'google');
 
-        if (isGoogleAuth) {
-            return res.status(400).json({
-                success: false,
-                error: 'MFA is not available for Google sign-in accounts. Google provides its own 2FA.'
-            });
-        }
+        // Note: MFA enrollment is available to all users who sign in with email/password
+        // Even if they originally registered via Google OAuth, they can use MFA for email/password login
+
 
         // Create client with user's token
         const supabase = createServerSupabaseClient(token);

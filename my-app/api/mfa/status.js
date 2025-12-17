@@ -21,9 +21,12 @@ export default async function handler(req, res) {
             return res.status(401).json({ success: false, error: authError });
         }
 
-        // Check if this is a Google OAuth user
-        const isGoogleAuth = user.app_metadata?.provider === 'google' ||
-            user.identities?.some(identity => identity.provider === 'google');
+        // Check if the CURRENT session was authenticated via Google OAuth
+        // Note: app_metadata.provider shows registration method
+        // We need to check if the CURRENT login was via Google, not just registration
+        // For email/password login, even if registered via Google, MFA should apply
+        const isGoogleAuth = user.app_metadata?.provider === 'google' &&
+            !user.app_metadata?.providers?.includes('email');
 
         // Create client with user's token
         const supabase = createServerSupabaseClient(token);
