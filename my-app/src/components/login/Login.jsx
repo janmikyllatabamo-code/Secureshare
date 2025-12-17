@@ -571,6 +571,7 @@ const Login = () => {
             }
 
             // Skip email confirmation for Google OAuth with valid @tup.edu.ph domain
+            // eslint-disable-next-line no-undef
             const skipConfirmation = isGoogleAuth && isValidTUPEmail(sessionToUse.user.email);
 
             // eslint-disable-next-line no-undef
