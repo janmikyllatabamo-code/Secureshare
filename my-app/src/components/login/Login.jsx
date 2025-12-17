@@ -1208,7 +1208,17 @@ const Login = () => {
       if (error) throw error;
 
       if (data?.user?.identities?.length === 0) {
-        setError('This email is already registered. Please sign in instead.');
+        // User exists (likely Google OAuth). Send password setup email to allow adding a password (linking).
+        console.log('User exists, sending password setup email for account linking...');
+
+        const result = await sendPasswordSetupEmail(email);
+
+        if (result.success) {
+          setError(`✅ We found an existing account with this email. A password setup link has been sent to ${email}. Click it to set a password and link your manual login.`);
+        } else {
+          // Fallback if email sending fails
+          setError('This email is already registered. Please sign in with Google.');
+        }
       } else {
         setError(`✅ Confirmation email sent to ${email}! Please check your inbox and click the link to verify your account and set your password.`);
       }
