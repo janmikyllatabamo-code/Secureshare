@@ -21,7 +21,6 @@ const Login = () => {
   const [showMFAEnrollment, setShowMFAEnrollment] = useState(false);
   const [showMFAVerification, setShowMFAVerification] = useState(false);
   const [showPasswordReset, setShowPasswordReset] = useState(false);
-  const [isSignUp, setIsSignUp] = useState(false);
   const [pendingUser, setPendingUser] = useState(null);
   const navigate = useNavigate();
 
@@ -1173,65 +1172,7 @@ const Login = () => {
    * Handle Manual Sign Up
    * Triggers the "Password Setup" flow via Supabase signUp
    */
-  const handleSignUp = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError("");
 
-    if (!email) {
-      setError("Please enter your email address");
-      setLoading(false);
-      return;
-    }
-
-    // Basic email validation
-    if (!email.includes('@')) {
-      setError("Please enter a valid email address");
-      setLoading(false);
-      return;
-    }
-
-    try {
-      // Create user with a temporary random password
-      // The confirmation email will contain a link that redirects back to /login?password_setup=true
-      // This allows the user to set their OWN password after confirming email
-      const tempPassword = crypto.randomUUID();
-
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password: tempPassword,
-        options: {
-          emailRedirectTo: `${window.location.origin}/login?password_setup=true`
-        }
-      });
-
-      if (error) throw error;
-
-      if (data?.user?.identities?.length === 0) {
-        // User exists (likely Google OAuth). Send password setup email to allow adding a password (linking).
-        console.log('User exists, sending password setup email for account linking...');
-
-        const result = await sendPasswordSetupEmail(email);
-
-        if (result.success) {
-          setError(`✅ We found an existing account with this email. A password setup link has been sent to ${email}. Click it to set a password and link your manual login.`);
-        } else {
-          // Fallback if email sending fails
-          setError('This email is already registered. Please sign in with Google.');
-        }
-      } else {
-        setError(`✅ Confirmation email sent to ${email}! Please check your inbox and click the link to verify your account and set your password.`);
-      }
-
-    } catch (err) {
-      console.error('Sign up error:', err);
-      setError(err.message || "Failed to sign up");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const currentHandleSubmit = isSignUp ? handleSignUp : handleSubmit;
 
   return (
     <div className='bg-radial-at-center from-[#F9F0D9] to-[#F2F2F2] min-h-screen'>
@@ -1283,32 +1224,11 @@ const Login = () => {
                   <ShieldCheck className="text-white w-8 h-8" />
                 </div>
                 <h2 className="text-3xl font-bold mb-2 text-[#7A1C1C]">
-                  {isSignUp ? "Create an Account" : "Access your student portal"}
+                  Access your student portal
                 </h2>
                 <p className="text-sm font-light text-[#4B1B1B]">
-                  {isSignUp ? "Sign up to start sharing files securely" : "Secure file sharing for academic excellence"}
+                  Secure file sharing for academic excellence
                 </p>
-              </div>
-
-              <div className="flex bg-black/20 p-1 rounded-lg mb-6 backdrop-blur-sm">
-                <button
-                  onClick={() => { setIsSignUp(false); setError(""); }}
-                  className={`flex-1 py-2 rounded-md text-sm font-medium transition-all ${!isSignUp
-                    ? 'bg-white text-[#7A1C1C] shadow-lg'
-                    : 'text-white hover:bg-white/10'
-                    }`}
-                >
-                  Sign In
-                </button>
-                <button
-                  onClick={() => { setIsSignUp(true); setError(""); }}
-                  className={`flex-1 py-2 rounded-md text-sm font-medium transition-all ${isSignUp
-                    ? 'bg-white text-[#7A1C1C] shadow-lg'
-                    : 'text-white hover:bg-white/10'
-                    }`}
-                >
-                  Sign Up
-                </button>
               </div>
 
               {/* Login/Signup Form */}
@@ -1331,7 +1251,7 @@ const Login = () => {
                   </div>
                 )}
 
-                <form onSubmit={currentHandleSubmit} className="space-y-5">
+                <form onSubmit={handleSubmit} className="space-y-5">
                   <div>
                     <label className="block text-sm font-bold text-gray-900 mb-1.5 ml-1">
                       Email Address
@@ -1396,7 +1316,7 @@ const Login = () => {
                   </div>
                   <div className="relative flex justify-center">
                     <span className="bg-white/40 backdrop-blur-xl px-3 py-0.5 text-xs font-medium text-[#4B1B1B]/70 uppercase tracking-wide">
-                      {isSignUp ? "Or sign up with" : "Or sign in with"}
+                      Or continue with
                     </span>
                   </div>
                 </div>
