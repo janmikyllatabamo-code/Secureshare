@@ -30,7 +30,8 @@ if (!supabaseInstance) {
       persistSession: true,
       detectSessionInUrl: true,
       // Handle clock skew warnings gracefully
-      flowType: 'pkce'
+      // Use implicit flow instead of PKCE to avoid code verifier loss issues
+      flowType: 'implicit'
     },
     global: {
       // Suppress clock skew warnings in development
@@ -39,11 +40,11 @@ if (!supabaseInstance) {
       }
     }
   })
-  
+
   // Suppress clock skew warnings by handling them gracefully
   if (process.env.NODE_ENV === 'development') {
     const originalWarn = console.warn
-    console.warn = function(...args) {
+    console.warn = function (...args) {
       // Filter out clock skew warnings
       if (args[0] && typeof args[0] === 'string' && args[0].includes('clock for skew')) {
         // Silently ignore clock skew warnings
