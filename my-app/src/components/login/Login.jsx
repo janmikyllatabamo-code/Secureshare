@@ -372,6 +372,27 @@ const Login = () => {
                     console.log(`   Unconfirmed @tup.edu.ph Google users: ${tupGoogleUsers.length}`);
                     console.log(`   Total unconfirmed Google OAuth users: ${googleUsers.length}`);
 
+                    // If no unconfirmed users found, check for CONFIRMED @tup.edu.ph users
+                    // These users should be allowed to sign in directly
+                    const confirmedTupUsers = usersData?.users?.filter(u => {
+                      const isGoogle = u.app_metadata?.provider === 'google' ||
+                        u.identities?.some(id => id.provider === 'google');
+                      const isConfirmed = !!u.email_confirmed_at;
+                      const isTup = u.email?.toLowerCase().endsWith('@tup.edu.ph');
+                      return isGoogle && isConfirmed && isTup;
+                    }) || [];
+
+                    console.log(`   Confirmed @tup.edu.ph Google users: ${confirmedTupUsers.length}`);
+
+                    // If we have a confirmed TUP user, show message to try signing in again
+                    if (confirmedTupUsers.length > 0 && googleUsers.length === 0) {
+                      console.log('✅ Found confirmed @tup.edu.ph user, they should be able to sign in');
+                      setError(`Your account is already confirmed! Please click "Sign in with Google" again to access the dashboard.`);
+                      setGoogleLoading(false);
+                      window.history.replaceState({}, document.title, '/login');
+                      return true;
+                    }
+
                     // Sort by creation date (most recent first)
                     const allGoogleUsers = [...tupGoogleUsers, ...googleUsers];
                     allGoogleUsers.sort((a, b) => {
