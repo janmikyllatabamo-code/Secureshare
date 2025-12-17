@@ -1333,18 +1333,18 @@ const Login = () => {
 
                 <form onSubmit={currentHandleSubmit} className="space-y-5">
                   <div>
-                    <label className="block text-sm font-medium text-red-100 mb-1.5 ml-1">
+                    <label className="block text-sm font-bold text-gray-900 mb-1.5 ml-1">
                       Email Address
                     </label>
                     <div className="relative group">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <Mail className="h-5 w-5 text-red-200 group-focus-within:text-white transition-colors" />
+                        <Mail className="h-5 w-5 text-gray-500 group-focus-within:text-[#7A1C1C] transition-colors" />
                       </div>
                       <input
                         type="email"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
-                        className="block w-full pl-10 pr-3 py-2.5 bg-white/10 border border-white/10 rounded-lg text-white placeholder-red-200/50 focus:outline-none focus:ring-2 focus:ring-white/50 focus:border-transparent transition-all"
+                        className="block w-full pl-10 pr-3 py-2.5 bg-white/50 border border-gray-300 rounded-lg text-black placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#7A1C1C]/50 focus:border-transparent transition-all"
                         placeholder="Enter your email"
                         required
                       />
@@ -1353,18 +1353,18 @@ const Login = () => {
 
                   {/* Password field is always shown for sign-up, and for sign-in */}
                   <div>
-                    <label className="block text-sm font-medium text-red-100 mb-1.5 ml-1">
+                    <label className="block text-sm font-bold text-gray-900 mb-1.5 ml-1">
                       Password
                     </label>
                     <div className="relative group">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <Lock className="h-5 w-5 text-red-200 group-focus-within:text-white transition-colors" />
+                        <Lock className="h-5 w-5 text-gray-500 group-focus-within:text-[#7A1C1C] transition-colors" />
                       </div>
                       <input
                         type="password"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        className="block w-full pl-10 pr-3 py-2.5 bg-white/10 border border-white/10 rounded-lg text-white placeholder-red-200/50 focus:outline-none focus:ring-2 focus:ring-white/50 focus:border-transparent transition-all"
+                        className="block w-full pl-10 pr-3 py-2.5 bg-white/50 border border-gray-300 rounded-lg text-black placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#7A1C1C]/50 focus:border-transparent transition-all"
                         placeholder="Enter your password"
                         required
                       />
