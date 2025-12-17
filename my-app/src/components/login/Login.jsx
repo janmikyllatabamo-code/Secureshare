@@ -10,6 +10,7 @@ import MFAEnrollment from './MFAEnrollment';
 import MFAVerification from './MFAVerification';
 import { sendOAuthConfirmationEmail, isEmailConfirmed, isValidTUPEmail } from '../../utils/emailConfirmation';
 import { sendPasswordSetupEmail, isNewGoogleOAuthUser, wasPasswordSetupEmailSent } from '../../utils/passwordSetup';
+import PasswordResetModal from './PasswordResetModal';
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -19,6 +20,7 @@ const Login = () => {
   const [error, setError] = useState("");
   const [showMFAEnrollment, setShowMFAEnrollment] = useState(false);
   const [showMFAVerification, setShowMFAVerification] = useState(false);
+  const [showPasswordReset, setShowPasswordReset] = useState(false);
   const [pendingUser, setPendingUser] = useState(null);
   const navigate = useNavigate();
 
@@ -32,6 +34,17 @@ const Login = () => {
       const hashParams = new URLSearchParams(window.location.hash.substring(1));
       const accessToken = hashParams.get('access_token');
       const type = hashParams.get('type');
+      const queryParams = new URLSearchParams(window.location.search);
+      const isPasswordSetup = queryParams.get('password_setup') === 'true';
+
+      // Check for password recovery/setup flow
+      if (type === 'recovery' && accessToken) {
+        console.log('🔐 Password recovery detected! Showing reset modal...');
+        setShowPasswordReset(true);
+        // Clean URL but keep token for Supabase to use
+        window.history.replaceState({}, document.title, '/login');
+        return;
+      }
 
       // Check if this is an email confirmation callback
       if (type === 'signup' && accessToken) {
@@ -1322,6 +1335,12 @@ const Login = () => {
           />
         )
       }
+
+      {showPasswordReset && (
+        <PasswordResetModal
+          onClose={() => setShowPasswordReset(false)}
+        />
+      )}
     </div >
   );
 };
