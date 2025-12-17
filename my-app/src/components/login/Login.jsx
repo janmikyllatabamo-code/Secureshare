@@ -119,10 +119,10 @@ const Login = () => {
             } else if (skipConfirmation) {
               console.log('✅ Google OAuth with @tup.edu.ph - skipping email confirmation');
 
-              // Send password setup email for new Google OAuth users
-              // This allows them to set up a password for manual email/password login
-              if (isNewGoogleOAuthUser(session.user) && !wasPasswordSetupEmailSent(session.user.id)) {
-                console.log('📧 Sending password setup email to new Google OAuth user:', userEmail);
+              // Send password setup email for Google OAuth users who haven't set up a password
+              // This allows them to use manual email/password login + MFA
+              if (!wasPasswordSetupEmailSent(session.user.id)) {
+                console.log('📧 Sending password setup email to Google OAuth user:', userEmail);
                 sendPasswordSetupEmail(userEmail, session.user.id).then(result => {
                   if (result.success && !result.alreadySent) {
                     console.log('✅ Password setup email sent successfully!');
