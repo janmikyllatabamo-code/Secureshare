@@ -1077,7 +1077,8 @@ const Login = () => {
     }
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (e) => {
+    e.preventDefault();
     setError("");
     setLoading(true);
 
