@@ -36,25 +36,32 @@ module.exports = async function handler(req, res) {
             return res.status(400).json({ error: 'Only @tup.edu.ph emails are allowed' });
         }
 
-        // Use resetPasswordForEmail to trigger Supabase to SEND the email
-        // (admin.generateLink only creates the link but doesn't send it)
-        const { data, error: resetError } = await supabaseAdmin.auth.resetPasswordForEmail(email, {
-            redirectTo: `${req.headers.origin || 'https://secureshare-ten.vercel.app'}/login?password_setup=true`
+        // Generate password recovery link (this is what allows setting up a password)
+        // This will ALSO send an email if Supabase SMTP is configured correctly
+        const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+            type: 'recovery',
+            email: email,
+            options: {
+                redirectTo: `${req.headers.origin || 'https://secureshare-ten.vercel.app'}/login?password_setup=true`
+            }
         });
 
-        if (resetError) {
-            console.error('Error sending password setup email:', resetError);
+        if (linkError) {
+            console.error('Error generating password setup link:', linkError);
             return res.status(500).json({
-                error: 'Failed to send password setup email',
-                details: resetError.message
+                error: 'Failed to generate password setup link',
+                details: linkError.message
             });
         }
+
+        console.log('Password setup link generated for:', email);
+        console.log('Link (first 100 chars):', linkData?.properties?.action_link?.substring(0, 100));
 
         return res.status(200).json({
             success: true,
             message: 'Password setup email sent',
-            // Note: We cannot get the link back when using resetPasswordForEmail (for security)
-            // So console display of the link will no longer be possible, which is what the user wants (email delivery)
+            // Return link as fallback (will be shown in console)
+            passwordSetupLink: linkData?.properties?.action_link
         });
 
     } catch (error) {
