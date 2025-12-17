@@ -1,31 +1,34 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../../lib/supabase';
 import { ShieldCheck } from 'lucide-react';
+import { enrollMfa, createMfaChallenge, verifyMfa } from '../../utils/mfaApi';
 
 const MFAEnrollment = ({ user, onComplete, onSkip }) => {
   const [qrCode, setQrCode] = useState(null);
   const [secret, setSecret] = useState('');
+  const [factorId, setFactorId] = useState(null);
   const [verificationCode, setVerificationCode] = useState('');
   const [loading, setLoading] = useState(false);
+  const [enrolling, setEnrolling] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    enrollMFA();
+    handleEnrollMFA();
   }, []);
 
-  const enrollMFA = async () => {
+  const handleEnrollMFA = async () => {
     try {
-      const { data, error: enrollError } = await supabase.auth.mfa.enroll({
-        factorType: 'totp',
-        friendlyName: 'Google Authenticator'
-      });
+      setEnrolling(true);
+      setError('');
 
-      if (enrollError) throw enrollError;
+      const data = await enrollMfa();
 
+      setFactorId(data.id);
       setQrCode(data.qr_code);
       setSecret(data.secret);
     } catch (err) {
       setError(err.message || 'Failed to enroll MFA');
+    } finally {
+      setEnrolling(false);
     }
   };
 
@@ -39,22 +42,15 @@ const MFAEnrollment = ({ user, onComplete, onSkip }) => {
     setError('');
 
     try {
-      // Get the factor ID from the enrollment
-      const { data: factors } = await supabase.auth.mfa.listFactors();
-      const totpFactor = factors?.totp?.[0];
+      // Create a challenge for the factor we just enrolled
+      const challengeData = await createMfaChallenge();
 
-      if (!totpFactor) {
-        throw new Error('MFA factor not found');
-      }
-
-      // Verify the code
-      const { data, error: verifyError } = await supabase.auth.mfa.verify({
-        factorId: totpFactor.id,
-        challengeId: totpFactor.id, // Use factor ID as challenge for enrollment
-        code: verificationCode
-      });
-
-      if (verifyError) throw verifyError;
+      // Verify the code via the API
+      await verifyMfa(
+        challengeData.factorId,
+        challengeData.challengeId,
+        verificationCode
+      );
 
       onComplete();
     } catch (err) {
@@ -85,9 +81,14 @@ const MFAEnrollment = ({ user, onComplete, onSkip }) => {
           </div>
         )}
 
-        {qrCode && (
+        {enrolling ? (
+          <div className="mb-6 text-center py-8">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#7A1C1C] mx-auto"></div>
+            <p className="mt-4 text-gray-600">Setting up MFA...</p>
+          </div>
+        ) : qrCode && (
           <div className="mb-6 text-center">
-            <div 
+            <div
               className="inline-block p-4 bg-white border-2 border-gray-200 rounded-lg"
               dangerouslySetInnerHTML={{ __html: qrCode }}
             />
@@ -110,13 +111,14 @@ const MFAEnrollment = ({ user, onComplete, onSkip }) => {
             onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ''))}
             placeholder="000000"
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#7A1C1C]"
+            disabled={enrolling}
           />
         </div>
 
         <div className="flex gap-3">
           <button
             onClick={verifyEnrollment}
-            disabled={loading || verificationCode.length !== 6}
+            disabled={loading || enrolling || verificationCode.length !== 6}
             className="flex-1 bg-[#7A1C1C] hover:bg-[#5a1515] text-white font-semibold py-2.5 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? 'Verifying...' : 'Verify & Enable'}
@@ -124,7 +126,8 @@ const MFAEnrollment = ({ user, onComplete, onSkip }) => {
           {onSkip && (
             <button
               onClick={onSkip}
-              className="px-4 py-2.5 border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 transition-colors"
+              disabled={loading || enrolling}
+              className="px-4 py-2.5 border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
             >
               Skip for now
             </button>
@@ -136,4 +139,5 @@ const MFAEnrollment = ({ user, onComplete, onSkip }) => {
 };
 
 export default MFAEnrollment;
+
 

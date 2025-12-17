@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Mail, Lock, ShieldCheck } from 'lucide-react';
-import { FaLock,  FaShieldAlt, FaUsers } from "react-icons/fa";
+import { FaLock, FaShieldAlt, FaUsers } from "react-icons/fa";
 import { IoShieldCheckmark } from "react-icons/io5";
 import Navbar from './Navbar';
 import { supabase } from '../../lib/supabase';
@@ -18,7 +18,6 @@ const Login = () => {
   const [error, setError] = useState("");
   const [showMFAEnrollment, setShowMFAEnrollment] = useState(false);
   const [showMFAVerification, setShowMFAVerification] = useState(false);
-  const [mfaChallenge, setMfaChallenge] = useState(null);
   const [pendingUser, setPendingUser] = useState(null);
   const navigate = useNavigate();
 
@@ -32,16 +31,16 @@ const Login = () => {
       const hashParams = new URLSearchParams(window.location.hash.substring(1));
       const accessToken = hashParams.get('access_token');
       const type = hashParams.get('type');
-      
+
       // Check if this is an email confirmation callback
       if (type === 'signup' && accessToken) {
         console.log('📧 Email confirmation detected in Login component...');
         // Wait for Supabase to process the token
         await new Promise(resolve => setTimeout(resolve, 1000));
-        
+
         // Get the session after confirmation
         const { data: { session: confirmedSession }, error } = await supabase.auth.getSession();
-        
+
         if (confirmedSession && confirmedSession.user) {
           // Check if email is confirmed
           if (confirmedSession.user.email_confirmed_at) {
@@ -67,36 +66,36 @@ const Login = () => {
     const { data: { subscription: authSubscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       // Only handle SIGNED_IN events for Google OAuth users
       if (event === 'SIGNED_IN' && session && session.user) {
-        const isGoogleAuth = session.user.app_metadata?.provider === 'google' || 
-                            session.user.identities?.some(identity => identity.provider === 'google');
-        
+        const isGoogleAuth = session.user.app_metadata?.provider === 'google' ||
+          session.user.identities?.some(identity => identity.provider === 'google');
+
         if (isGoogleAuth) {
           // Get email from multiple possible locations in Google OAuth response
           const emailFromUser = session.user.email;
           const emailFromMetadata = session.user.user_metadata?.email;
           const emailFromIdentity = session.user.identities?.find(id => id.provider === 'google')?.identity_data?.email;
-          
+
           // Use the first available email
           const userEmail = emailFromUser || emailFromMetadata || emailFromIdentity;
-          
+
           if (userEmail) {
             // Capture email immediately before any sign-out happens
             if (!isEmailConfirmed(session.user)) {
               console.log('📧 Captured OAuth email before sign-out:', userEmail);
               capturedOAuthEmailRef.current = userEmail;
-              
+
               // IMMEDIATELY send confirmation email using Supabase Auth while we have the session
               console.log('🚀 Sending confirmation email via Supabase Auth to:', userEmail);
               try {
                 // Try Supabase Auth resend first (proper method)
-                    const { error: resendError } = await supabase.auth.resend({
-                      type: 'signup',
-                      email: userEmail,
-                      options: {
-                        emailRedirectTo: `${window.location.origin}/portal`
-                      }
-                    });
-                
+                const { error: resendError } = await supabase.auth.resend({
+                  type: 'signup',
+                  email: userEmail,
+                  options: {
+                    emailRedirectTo: `${window.location.origin}/portal`
+                  }
+                });
+
                 if (!resendError) {
                   console.log('✅ Confirmation email sent successfully via Supabase Auth!');
                 } else {
@@ -129,12 +128,12 @@ const Login = () => {
 
     const handleAuthCallback = async () => {
       if (isProcessing) return;
-      
+
       // Check for OAuth callback in URL
       const urlParams = new URLSearchParams(window.location.search);
       const code = urlParams.get('code');
       const error = urlParams.get('error');
-      
+
       // Handle error parameter, but check for session first before showing error
       let hasErrorParam = false;
       if (error) {
@@ -149,35 +148,35 @@ const Login = () => {
         }
         // For other errors, try to get session anyway - sometimes session still works
       }
-      
+
       // Check for code parameter (OAuth success) or try to get session even with error param
       if (code || hasErrorParam) {
         // OAuth callback detected - Supabase automatically exchanges the code
         // Clean up URL first
         window.history.replaceState({}, document.title, '/login');
-        
+
         // Wait a moment for Supabase to process the code exchange
         await new Promise(resolve => setTimeout(resolve, 1500));
-        
+
         // Try multiple times to get session and capture email
         let session = null;
         let userEmail = null;
         for (let i = 0; i < 5; i++) {
           const { data: { session: currentSession }, error: getSessionError } = await supabase.auth.getSession();
-          
+
           if (currentSession && currentSession.user) {
-            const isGoogleAuth = currentSession.user.app_metadata?.provider === 'google' || 
-                                currentSession.user.identities?.some(identity => identity.provider === 'google');
-            
+            const isGoogleAuth = currentSession.user.app_metadata?.provider === 'google' ||
+              currentSession.user.identities?.some(identity => identity.provider === 'google');
+
             if (isGoogleAuth) {
               // Get email from multiple possible locations in Google OAuth response
               const emailFromUser = currentSession.user.email;
               const emailFromMetadata = currentSession.user.user_metadata?.email;
               const emailFromIdentity = currentSession.user.identities?.find(id => id.provider === 'google')?.identity_data?.email;
-              
+
               // Use the first available email
               userEmail = emailFromUser || emailFromMetadata || emailFromIdentity;
-              
+
               if (userEmail) {
                 session = currentSession;
                 capturedOAuthEmailRef.current = userEmail;
@@ -187,7 +186,7 @@ const Login = () => {
                   metadataEmail: emailFromMetadata,
                   identityEmail: emailFromIdentity
                 });
-                
+
                 // Send confirmation email immediately while we have the session using Supabase Auth
                 if (!isEmailConfirmed(currentSession.user)) {
                   console.log('🚀 Sending confirmation email via Supabase Auth to:', userEmail);
@@ -201,7 +200,7 @@ const Login = () => {
                         emailRedirectTo: `${window.location.origin}/portal`
                       }
                     });
-                    
+
                     if (!resendError) {
                       console.log('✅ Confirmation email sent successfully via Supabase Auth!');
                       setError(`✅ A confirmation email has been sent to ${userEmail}. Please check your email (including spam folder) and click the confirmation link to complete your sign-in. You cannot access the dashboard until you confirm your email.`);
@@ -211,7 +210,7 @@ const Login = () => {
                     } else {
                       console.log('⚠️  Supabase Auth resend failed:', resendError?.message);
                       console.log('   Trying alternative method...');
-                      
+
                       // If resend fails, try the sendOAuthConfirmationEmail function
                       const result = await sendOAuthConfirmationEmail(userEmail);
                       if (result.success) {
@@ -226,7 +225,7 @@ const Login = () => {
                           const fullLink = result.confirmationLink;
                           console.log('🔗 FULL CONFIRMATION LINK:', fullLink);
                           console.log('📋 Link copied to clipboard! Click it to confirm your email.');
-                          
+
                           // Copy to clipboard
                           try {
                             await navigator.clipboard.writeText(fullLink);
@@ -234,7 +233,7 @@ const Login = () => {
                           } catch (err) {
                             console.log('⚠️  Could not copy to clipboard');
                           }
-                          
+
                           // Try to open the link automatically
                           try {
                             window.open(fullLink, '_blank');
@@ -242,7 +241,7 @@ const Login = () => {
                           } catch (err) {
                             console.log('⚠️  Could not open link automatically');
                           }
-                          
+
                           setError(`⚠️ EMAIL CONFIRMATIONS NOT ENABLED!\n\nTo fix: Go to Supabase Dashboard > Authentication > Email > Enable "Confirm sign up"\n\nYour confirmation link (opened in new tab, also in console):\n${fullLink.substring(0, 80)}...\n\nClick the link to confirm your email now!`);
                           setGoogleLoading(false);
                           window.history.replaceState({}, document.title, '/login');
@@ -254,210 +253,210 @@ const Login = () => {
                     console.error('❌ Error sending confirmation email:', err);
                   }
                 }
-              break; // Found session and sent email, exit loop
+                break; // Found session and sent email, exit loop
+              }
+            }
+
+            // Wait before next attempt
+            if (i < 4) {
+              await new Promise(resolve => setTimeout(resolve, 500));
             }
           }
-          
-          // Wait before next attempt
-          if (i < 4) {
-            await new Promise(resolve => setTimeout(resolve, 500));
+
+          // Get the final session for further processing
+          const { data: { session: finalSession }, error: finalSessionError } = await supabase.auth.getSession();
+          session = finalSession || session;
+
+          if (finalSessionError) {
+            console.error('Session error:', finalSessionError);
+            // Check if it's an email confirmation issue
+            if (finalSessionError.message?.includes('email') || finalSessionError.message?.includes('confirm')) {
+              setError('Please confirm your email address before signing in. Check your email for a confirmation link.');
+            } else {
+              setError('Failed to complete authentication. Please try again.');
+            }
+            setGoogleLoading(false);
+            return;
           }
-        }
-        
-        // Get the final session for further processing
-        const { data: { session: finalSession }, error: finalSessionError } = await supabase.auth.getSession();
-        session = finalSession || session;
-        
-        if (finalSessionError) {
-          console.error('Session error:', finalSessionError);
-          // Check if it's an email confirmation issue
-          if (finalSessionError.message?.includes('email') || finalSessionError.message?.includes('confirm')) {
-            setError('Please confirm your email address before signing in. Check your email for a confirmation link.');
-          } else {
-            setError('Failed to complete authentication. Please try again.');
-          }
-          setGoogleLoading(false);
-          return;
-        }
-        
-        // If no session, the user might have been created but email not confirmed
-        // Try to get user info and send confirmation email
-        let sessionToUse = session || null;
-        if (!session) {
-          console.log('No session found, checking if user was created...');
-          
-          // Wait a bit more for user creation
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          const { data: { session: retrySession }, error: retryError } = await supabase.auth.getSession();
-          
-          if (retrySession) {
-            sessionToUse = retrySession;
-          } else {
-            // No session - user was likely created but email not confirmed
-            // This happens when email_confirmed_at is NULL
-            console.log('No session after retry - user created but email not confirmed');
-            
-            // FORCEFULLY find and send email to the most recent Google OAuth user
-            const forceSendConfirmationEmail = async () => {
-              console.log('🔍 FORCEFULLY searching for most recent Google OAuth user...');
-              
-              // FIRST: If we have captured email, use it immediately
-              if (capturedOAuthEmailRef.current) {
-                console.log('✅ Using captured email for forceful send:', capturedOAuthEmailRef.current);
-                try {
-                  const result = await sendOAuthConfirmationEmail(capturedOAuthEmailRef.current);
-                  if (result.success) {
-                    console.log('✅ Confirmation email sent successfully to captured email!');
-                    setError(`✅ A confirmation email has been sent to ${capturedOAuthEmailRef.current}. Please check your email (including spam folder) and click the confirmation link to complete your sign-in.`);
-                    setGoogleLoading(false);
-                    window.history.replaceState({}, document.title, '/login');
-                    return true;
-                  } else if (result.confirmationLink) {
-                    console.log('🔗 Confirmation link:', result.confirmationLink);
-                    setError(`⚠️ Email service not configured. Your confirmation link: ${result.confirmationLink.substring(0, 150)}... (Check console for full link)`);
-                    setGoogleLoading(false);
-                    window.history.replaceState({}, document.title, '/login');
-                    return true;
-                  }
-                } catch (err) {
-                  console.error('❌ Error sending to captured email:', err);
-                }
-              }
-              
-              // SECOND: Try multiple times with increasing delays to find the user
-              for (let attempt = 1; attempt <= 5; attempt++) {
-                console.log(`   Force search attempt ${attempt}/5...`);
-                
-                if (attempt > 1) {
-                  await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-                }
-                
-                try {
-                  // Get all users
-                  const { data: usersData, error: listError } = await supabaseAdmin.auth.admin.listUsers();
-                  
-                  if (listError) {
-                    console.error(`   Attempt ${attempt} failed:`, listError);
-                    continue;
-                  }
-                  
-                  console.log(`   Total users in database: ${usersData?.users?.length || 0}`);
-                  
-                  // Priority 1: Find unconfirmed @tup.edu.ph Google OAuth users (most recent first)
-                  const tupGoogleUsers = usersData?.users?.filter(u => {
-                    const isGoogle = u.app_metadata?.provider === 'google' || 
-                                    u.identities?.some(id => id.provider === 'google');
-                    const isTup = u.email?.toLowerCase().endsWith('@tup.edu.ph');
-                    const isUnconfirmed = !u.email_confirmed_at;
-                    return isGoogle && isTup && isUnconfirmed;
-                  }) || [];
-                  
-                  // Priority 2: Find ANY unconfirmed Google OAuth user (regardless of email domain)
-                  const googleUsers = usersData?.users?.filter(u => {
-                    const isGoogle = u.app_metadata?.provider === 'google' || 
-                                    u.identities?.some(id => id.provider === 'google');
-                    const isUnconfirmed = !u.email_confirmed_at;
-                    if (isGoogle) {
-                      console.log(`   Found Google OAuth user: ${u.email}, created: ${u.created_at}, confirmed: ${!!u.email_confirmed_at}, isTup: ${u.email?.toLowerCase().endsWith('@tup.edu.ph')}`);
-                    }
-                    return isGoogle && isUnconfirmed;
-                  }) || [];
-                  
-                  console.log(`   Unconfirmed @tup.edu.ph Google users: ${tupGoogleUsers.length}`);
-                  console.log(`   Total unconfirmed Google OAuth users: ${googleUsers.length}`);
-                  
-                  // Sort by creation date (most recent first)
-                  const allGoogleUsers = [...tupGoogleUsers, ...googleUsers];
-                  allGoogleUsers.sort((a, b) => {
-                    const dateA = new Date(a.created_at || 0);
-                    const dateB = new Date(b.created_at || 0);
-                    return dateB - dateA;
-                  });
-                  
-                  const mostRecentGoogleUser = allGoogleUsers[0];
-                  
-                  if (mostRecentGoogleUser && mostRecentGoogleUser.email) {
-                    console.log('✅ Found most recent Google OAuth user:', mostRecentGoogleUser.email);
-                    console.log('   User details:', {
-                      email: mostRecentGoogleUser.email,
-                      created: mostRecentGoogleUser.created_at,
-                      confirmed: !!mostRecentGoogleUser.email_confirmed_at,
-                      provider: mostRecentGoogleUser.app_metadata?.provider,
-                      identities: mostRecentGoogleUser.identities
-                    });
-                    
-                    // Send confirmation email FORCEFULLY
-                    console.log('🚀 FORCEFULLY sending confirmation email to:', mostRecentGoogleUser.email);
-                    const result = await sendOAuthConfirmationEmail(mostRecentGoogleUser.email);
-                    
+
+          // If no session, the user might have been created but email not confirmed
+          // Try to get user info and send confirmation email
+          let sessionToUse = session || null;
+          if (!session) {
+            console.log('No session found, checking if user was created...');
+
+            // Wait a bit more for user creation
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            const { data: { session: retrySession }, error: retryError } = await supabase.auth.getSession();
+
+            if (retrySession) {
+              sessionToUse = retrySession;
+            } else {
+              // No session - user was likely created but email not confirmed
+              // This happens when email_confirmed_at is NULL
+              console.log('No session after retry - user created but email not confirmed');
+
+              // FORCEFULLY find and send email to the most recent Google OAuth user
+              const forceSendConfirmationEmail = async () => {
+                console.log('🔍 FORCEFULLY searching for most recent Google OAuth user...');
+
+                // FIRST: If we have captured email, use it immediately
+                if (capturedOAuthEmailRef.current) {
+                  console.log('✅ Using captured email for forceful send:', capturedOAuthEmailRef.current);
+                  try {
+                    const result = await sendOAuthConfirmationEmail(capturedOAuthEmailRef.current);
                     if (result.success) {
-                      console.log('✅ Confirmation email sent successfully!');
-                      setError(`✅ A confirmation email has been sent to ${mostRecentGoogleUser.email}. Please check your email (including spam folder) and click the confirmation link to complete your sign-in. You cannot access the dashboard until you confirm your email.`);
+                      console.log('✅ Confirmation email sent successfully to captured email!');
+                      setError(`✅ A confirmation email has been sent to ${capturedOAuthEmailRef.current}. Please check your email (including spam folder) and click the confirmation link to complete your sign-in.`);
                       setGoogleLoading(false);
                       window.history.replaceState({}, document.title, '/login');
-                      return true; // Success
-                    } else {
-                      console.error('❌ Failed to send email:', result.error);
-                      if (result.confirmationLink) {
-                        console.log('🔗 Confirmation link:', result.confirmationLink);
-                        setError(`⚠️ Email service not configured. Your confirmation link: ${result.confirmationLink.substring(0, 150)}... (Check console for full link)`);
+                      return true;
+                    } else if (result.confirmationLink) {
+                      console.log('🔗 Confirmation link:', result.confirmationLink);
+                      setError(`⚠️ Email service not configured. Your confirmation link: ${result.confirmationLink.substring(0, 150)}... (Check console for full link)`);
+                      setGoogleLoading(false);
+                      window.history.replaceState({}, document.title, '/login');
+                      return true;
+                    }
+                  } catch (err) {
+                    console.error('❌ Error sending to captured email:', err);
+                  }
+                }
+
+                // SECOND: Try multiple times with increasing delays to find the user
+                for (let attempt = 1; attempt <= 5; attempt++) {
+                  console.log(`   Force search attempt ${attempt}/5...`);
+
+                  if (attempt > 1) {
+                    await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+                  }
+
+                  try {
+                    // Get all users
+                    const { data: usersData, error: listError } = await supabaseAdmin.auth.admin.listUsers();
+
+                    if (listError) {
+                      console.error(`   Attempt ${attempt} failed:`, listError);
+                      continue;
+                    }
+
+                    console.log(`   Total users in database: ${usersData?.users?.length || 0}`);
+
+                    // Priority 1: Find unconfirmed @tup.edu.ph Google OAuth users (most recent first)
+                    const tupGoogleUsers = usersData?.users?.filter(u => {
+                      const isGoogle = u.app_metadata?.provider === 'google' ||
+                        u.identities?.some(id => id.provider === 'google');
+                      const isTup = u.email?.toLowerCase().endsWith('@tup.edu.ph');
+                      const isUnconfirmed = !u.email_confirmed_at;
+                      return isGoogle && isTup && isUnconfirmed;
+                    }) || [];
+
+                    // Priority 2: Find ANY unconfirmed Google OAuth user (regardless of email domain)
+                    const googleUsers = usersData?.users?.filter(u => {
+                      const isGoogle = u.app_metadata?.provider === 'google' ||
+                        u.identities?.some(id => id.provider === 'google');
+                      const isUnconfirmed = !u.email_confirmed_at;
+                      if (isGoogle) {
+                        console.log(`   Found Google OAuth user: ${u.email}, created: ${u.created_at}, confirmed: ${!!u.email_confirmed_at}, isTup: ${u.email?.toLowerCase().endsWith('@tup.edu.ph')}`);
+                      }
+                      return isGoogle && isUnconfirmed;
+                    }) || [];
+
+                    console.log(`   Unconfirmed @tup.edu.ph Google users: ${tupGoogleUsers.length}`);
+                    console.log(`   Total unconfirmed Google OAuth users: ${googleUsers.length}`);
+
+                    // Sort by creation date (most recent first)
+                    const allGoogleUsers = [...tupGoogleUsers, ...googleUsers];
+                    allGoogleUsers.sort((a, b) => {
+                      const dateA = new Date(a.created_at || 0);
+                      const dateB = new Date(b.created_at || 0);
+                      return dateB - dateA;
+                    });
+
+                    const mostRecentGoogleUser = allGoogleUsers[0];
+
+                    if (mostRecentGoogleUser && mostRecentGoogleUser.email) {
+                      console.log('✅ Found most recent Google OAuth user:', mostRecentGoogleUser.email);
+                      console.log('   User details:', {
+                        email: mostRecentGoogleUser.email,
+                        created: mostRecentGoogleUser.created_at,
+                        confirmed: !!mostRecentGoogleUser.email_confirmed_at,
+                        provider: mostRecentGoogleUser.app_metadata?.provider,
+                        identities: mostRecentGoogleUser.identities
+                      });
+
+                      // Send confirmation email FORCEFULLY
+                      console.log('🚀 FORCEFULLY sending confirmation email to:', mostRecentGoogleUser.email);
+                      const result = await sendOAuthConfirmationEmail(mostRecentGoogleUser.email);
+
+                      if (result.success) {
+                        console.log('✅ Confirmation email sent successfully!');
+                        setError(`✅ A confirmation email has been sent to ${mostRecentGoogleUser.email}. Please check your email (including spam folder) and click the confirmation link to complete your sign-in. You cannot access the dashboard until you confirm your email.`);
                         setGoogleLoading(false);
                         window.history.replaceState({}, document.title, '/login');
-                        return true; // At least we have the link
+                        return true; // Success
+                      } else {
+                        console.error('❌ Failed to send email:', result.error);
+                        if (result.confirmationLink) {
+                          console.log('🔗 Confirmation link:', result.confirmationLink);
+                          setError(`⚠️ Email service not configured. Your confirmation link: ${result.confirmationLink.substring(0, 150)}... (Check console for full link)`);
+                          setGoogleLoading(false);
+                          window.history.replaceState({}, document.title, '/login');
+                          return true; // At least we have the link
+                        }
                       }
+                    } else {
+                      console.log(`   Attempt ${attempt}: No unconfirmed Google OAuth users found yet`);
                     }
-                  } else {
-                    console.log(`   Attempt ${attempt}: No unconfirmed Google OAuth users found yet`);
+                  } catch (err) {
+                    console.error(`   Attempt ${attempt} error:`, err);
                   }
-                } catch (err) {
-                  console.error(`   Attempt ${attempt} error:`, err);
                 }
-              }
-              
-              return false; // Failed
-            };
-            
-            // SIMPLIFIED: Use captured email first, then try to get from auth state
-            let userEmail = capturedOAuthEmailRef.current;
-            let emailSent = false;
-            
-            // PRIORITY 1: Use captured email from auth state change (most reliable)
-            if (userEmail) {
-              console.log('✅ Using captured OAuth email:', userEmail);
-              
-              // Send confirmation email immediately
-              console.log('🚀 Sending confirmation email to captured email:', userEmail);
-              try {
-                const result = await sendOAuthConfirmationEmail(userEmail);
-                if (result.success) {
-                  setError(`✅ A confirmation email has been sent to ${userEmail}. Please check your email (including spam folder) and click the confirmation link to complete your sign-in. You cannot access the dashboard until you confirm your email.`);
-                  setGoogleLoading(false);
-                  window.history.replaceState({}, document.title, '/login');
-                  emailSent = true;
-                } else {
-                  console.error('❌ Failed to send confirmation email:', result.error);
-                  if (result.confirmationLink) {
-                    setError(`⚠️ Email service not configured. Please enable email confirmations in Supabase Dashboard > Authentication > Email > "Confirm sign up" and configure SMTP. Your confirmation link: ${result.confirmationLink.substring(0, 100)}... (Check console for full link)`);
-                    console.log('🔗 Full confirmation link:', result.confirmationLink);
+
+                return false; // Failed
+              };
+
+              // SIMPLIFIED: Use captured email first, then try to get from auth state
+              let userEmail = capturedOAuthEmailRef.current;
+              let emailSent = false;
+
+              // PRIORITY 1: Use captured email from auth state change (most reliable)
+              if (userEmail) {
+                console.log('✅ Using captured OAuth email:', userEmail);
+
+                // Send confirmation email immediately
+                console.log('🚀 Sending confirmation email to captured email:', userEmail);
+                try {
+                  const result = await sendOAuthConfirmationEmail(userEmail);
+                  if (result.success) {
+                    setError(`✅ A confirmation email has been sent to ${userEmail}. Please check your email (including spam folder) and click the confirmation link to complete your sign-in. You cannot access the dashboard until you confirm your email.`);
                     setGoogleLoading(false);
                     window.history.replaceState({}, document.title, '/login');
                     emailSent = true;
+                  } else {
+                    console.error('❌ Failed to send confirmation email:', result.error);
+                    if (result.confirmationLink) {
+                      setError(`⚠️ Email service not configured. Please enable email confirmations in Supabase Dashboard > Authentication > Email > "Confirm sign up" and configure SMTP. Your confirmation link: ${result.confirmationLink.substring(0, 100)}... (Check console for full link)`);
+                      console.log('🔗 Full confirmation link:', result.confirmationLink);
+                      setGoogleLoading(false);
+                      window.history.replaceState({}, document.title, '/login');
+                      emailSent = true;
+                    }
                   }
+                } catch (err) {
+                  console.error('❌ Error sending confirmation email:', err);
                 }
-              } catch (err) {
-                console.error('❌ Error sending confirmation email:', err);
               }
-            }
-            
-            // PRIORITY 2: If no captured email, try to get from auth state
-            if (!emailSent && !userEmail) {
-              try {
-                const { data: { user }, error: getUserError } = await supabase.auth.getUser();
-                if (user && user.email) {
-                  userEmail = user.email;
-                  console.log('✅ Found user from auth state:', userEmail);
-                  
-                  // Send confirmation email
+
+              // PRIORITY 2: If no captured email, try to get from auth state
+              if (!emailSent && !userEmail) {
+                try {
+                  const { data: { user }, error: getUserError } = await supabase.auth.getUser();
+                  if (user && user.email) {
+                    userEmail = user.email;
+                    console.log('✅ Found user from auth state:', userEmail);
+
+                    // Send confirmation email
                     console.log('🚀 Sending confirmation email to auth state user:', userEmail);
                     const result = await sendOAuthConfirmationEmail(userEmail);
                     if (result.success) {
@@ -465,77 +464,77 @@ const Login = () => {
                       setGoogleLoading(false);
                       window.history.replaceState({}, document.title, '/login');
                       emailSent = true;
-                  } else if (result.confirmationLink) {
-                    setError(`⚠️ Email service not configured. Your confirmation link: ${result.confirmationLink.substring(0, 100)}... (Check console for full link)`);
-                    console.log('🔗 Full confirmation link:', result.confirmationLink);
-                    setGoogleLoading(false);
-                    window.history.replaceState({}, document.title, '/login');
-                    emailSent = true;
+                    } else if (result.confirmationLink) {
+                      setError(`⚠️ Email service not configured. Your confirmation link: ${result.confirmationLink.substring(0, 100)}... (Check console for full link)`);
+                      console.log('🔗 Full confirmation link:', result.confirmationLink);
+                      setGoogleLoading(false);
+                      window.history.replaceState({}, document.title, '/login');
+                      emailSent = true;
+                    }
+                  } else {
+                    console.log('⚠️  No user found in auth state. Error:', getUserError);
                   }
-                } else {
-                  console.log('⚠️  No user found in auth state. Error:', getUserError);
+                } catch (userError) {
+                  console.log('❌ Could not get user from auth state:', userError);
                 }
-              } catch (userError) {
-                console.log('❌ Could not get user from auth state:', userError);
               }
-            }
-            
-            // PRIORITY 3: If still no email, try forceful search (simplified)
-            if (!emailSent) {
-              emailSent = await forceSendConfirmationEmail();
-            }
-            
-            // PRIORITY 4: Last resort - try to find user by searching (with better error handling)
-            if (!emailSent && !userEmail) {
-              console.log('🔍 Last resort: Searching for user in database...');
-                    
-              // Wait a bit for user creation to complete
-              await new Promise(resolve => setTimeout(resolve, 2000));
-              
-              try {
-                // Try to get user from auth state one more time
-                const { data: { user } } = await supabase.auth.getUser();
-                if (user && user.email) {
-                  userEmail = user.email;
-                  console.log('✅ Found user on retry:', userEmail);
-                  
-                  const result = await sendOAuthConfirmationEmail(userEmail);
-                      if (result.success) {
-                    setError(`✅ A confirmation email has been sent to ${userEmail}. Please check your email (including spam folder) and click the confirmation link to complete your sign-in.`);
-                        setGoogleLoading(false);
-                        window.history.replaceState({}, document.title, '/login');
-                        emailSent = true;
-                      } else if (result.confirmationLink) {
-                    setError(`⚠️ Email service not configured. Your confirmation link: ${result.confirmationLink.substring(0, 100)}... (Check console for full link)`);
-                        console.log('🔗 Full confirmation link:', result.confirmationLink);
-                        setGoogleLoading(false);
-                        window.history.replaceState({}, document.title, '/login');
-                        emailSent = true;
-                  }
+
+              // PRIORITY 3: If still no email, try forceful search (simplified)
+              if (!emailSent) {
+                emailSent = await forceSendConfirmationEmail();
+              }
+
+              // PRIORITY 4: Last resort - try to find user by searching (with better error handling)
+              if (!emailSent && !userEmail) {
+                console.log('🔍 Last resort: Searching for user in database...');
+
+                // Wait a bit for user creation to complete
+                await new Promise(resolve => setTimeout(resolve, 2000));
+
+                try {
+                  // Try to get user from auth state one more time
+                  const { data: { user } } = await supabase.auth.getUser();
+                  if (user && user.email) {
+                    userEmail = user.email;
+                    console.log('✅ Found user on retry:', userEmail);
+
+                    const result = await sendOAuthConfirmationEmail(userEmail);
+                    if (result.success) {
+                      setError(`✅ A confirmation email has been sent to ${userEmail}. Please check your email (including spam folder) and click the confirmation link to complete your sign-in.`);
+                      setGoogleLoading(false);
+                      window.history.replaceState({}, document.title, '/login');
+                      emailSent = true;
+                    } else if (result.confirmationLink) {
+                      setError(`⚠️ Email service not configured. Your confirmation link: ${result.confirmationLink.substring(0, 100)}... (Check console for full link)`);
+                      console.log('🔗 Full confirmation link:', result.confirmationLink);
+                      setGoogleLoading(false);
+                      window.history.replaceState({}, document.title, '/login');
+                      emailSent = true;
+                    }
                   }
                 } catch (err) {
-                console.error('Error in last resort attempt:', err);
+                  console.error('Error in last resort attempt:', err);
+                }
               }
-            }
-            
-            // Final fallback: If we still have no email, show helpful error
-            if (!emailSent) {
-              if (userEmail) {
-                // We have email but couldn't send - show error with email
-                setError(`Your account has been created! However, we couldn't send a confirmation email to ${userEmail}. Please try signing in again with Google, and we will send you a confirmation email. Check your spam folder as well.`);
-                  } else {
-                // No email at all - show generic error
-                console.log('❌ Could not find user email after all attempts');
-                setError('Your account has been created! However, we couldn\'t find your account to send a confirmation email. Please try signing in again with Google, and we will send you a confirmation email. Check your spam folder as well.');
+
+              // Final fallback: If we still have no email, show helpful error
+              if (!emailSent) {
+                if (userEmail) {
+                  // We have email but couldn't send - show error with email
+                  setError(`Your account has been created! However, we couldn't send a confirmation email to ${userEmail}. Please try signing in again with Google, and we will send you a confirmation email. Check your spam folder as well.`);
+                } else {
+                  // No email at all - show generic error
+                  console.log('❌ Could not find user email after all attempts');
+                  setError('Your account has been created! However, we couldn\'t find your account to send a confirmation email. Please try signing in again with Google, and we will send you a confirmation email. Check your spam folder as well.');
+                }
+                setGoogleLoading(false);
+                window.history.replaceState({}, document.title, '/login');
+                return;
               }
-              setGoogleLoading(false);
-              window.history.replaceState({}, document.title, '/login');
-              return;
-            }
-          } // Close if (!emailSent) block from line 425
-        } // Close else block from line 261
+            } // Close if (!emailSent) block from line 425
+          } // Close else block from line 261
         } // Close if (!session) block from line 252
-        
+
         // sessionToUse is declared at line 251 in the same scope (if (code || hasErrorParam) block)
         // eslint-disable-next-line no-undef
         if (sessionToUse && sessionToUse.user) {
@@ -543,14 +542,14 @@ const Login = () => {
           if (hasErrorParam) {
             setError('');
           }
-          
+
           isProcessing = true;
           // CRITICAL: Check email confirmation BEFORE processing session
           // eslint-disable-next-line no-undef
-          const isGoogleAuth = sessionToUse.user.app_metadata?.provider === 'google' || 
-                              // eslint-disable-next-line no-undef
-                              sessionToUse.user.identities?.some(identity => identity.provider === 'google');
-          
+          const isGoogleAuth = sessionToUse.user.app_metadata?.provider === 'google' ||
+            // eslint-disable-next-line no-undef
+            sessionToUse.user.identities?.some(identity => identity.provider === 'google');
+
           if (isGoogleAuth) {
             // Validate email domain
             // eslint-disable-next-line no-undef
@@ -563,7 +562,7 @@ const Login = () => {
               isProcessing = false;
               return;
             }
-            
+
             // STRICT: Check email confirmation - if not confirmed, stay on login page
             // Database trigger ensures email_confirmed_at is NULL, but double-check here
             // eslint-disable-next-line no-undef
@@ -571,7 +570,7 @@ const Login = () => {
               // Sign out IMMEDIATELY to prevent any auto-login
               await supabase.auth.signOut();
               localStorage.removeItem('authUser');
-              
+
               // Send confirmation email automatically
               try {
                 // eslint-disable-next-line no-undef
@@ -599,7 +598,7 @@ const Login = () => {
                 // eslint-disable-next-line no-undef
                 setError(`Please confirm your email address (${sessionToUse.user.email}) before signing in. Error: ${err.message}. Make sure email confirmations are enabled in Supabase Dashboard.`);
               }
-              
+
               setGoogleLoading(false);
               window.history.replaceState({}, document.title, '/login');
               isProcessing = false;
@@ -607,12 +606,12 @@ const Login = () => {
               return;
             }
           }
-          
+
           // Only proceed if email is confirmed (or not Google OAuth)
           // eslint-disable-next-line no-undef
           await handleUserSession(sessionToUse.user);
           isProcessing = false;
-        // eslint-enable no-undef
+          // eslint-enable no-undef
         } else {
           // No session - show error if we have error parameter
           if (hasErrorParam) {
@@ -625,16 +624,16 @@ const Login = () => {
           setGoogleLoading(false);
         }
       }
-      
+
       // No OAuth callback - check existing session
       if (!code && !hasErrorParam) {
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        
+
         if (session && !sessionError && session.user) {
           isProcessing = true;
-          const isGoogleAuth = session.user.app_metadata?.provider === 'google' || 
-                              session.user.identities?.some(identity => identity.provider === 'google');
-          
+          const isGoogleAuth = session.user.app_metadata?.provider === 'google' ||
+            session.user.identities?.some(identity => identity.provider === 'google');
+
           if (isGoogleAuth && !isEmailConfirmed(session.user)) {
             // Sign out if email not confirmed
             await supabase.auth.signOut();
@@ -644,12 +643,12 @@ const Login = () => {
             isProcessing = false;
             return;
           }
-          
+
           // Only proceed if email is confirmed
           if (!isGoogleAuth || isEmailConfirmed(session.user)) {
-        await handleUserSession(session.user);
+            await handleUserSession(session.user);
           }
-        isProcessing = false;
+          isProcessing = false;
         }
       }
     };
@@ -659,14 +658,14 @@ const Login = () => {
     // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (isProcessing) return;
-      
+
       if (event === 'SIGNED_IN' && session && session.user) {
         isProcessing = true;
-        
+
         // CRITICAL: Check email confirmation IMMEDIATELY for Google OAuth
-        const isGoogleAuth = session.user.app_metadata?.provider === 'google' || 
-                            session.user.identities?.some(identity => identity.provider === 'google');
-        
+        const isGoogleAuth = session.user.app_metadata?.provider === 'google' ||
+          session.user.identities?.some(identity => identity.provider === 'google');
+
         if (isGoogleAuth) {
           // Validate email domain
           if (!isValidTUPEmail(session.user.email)) {
@@ -677,14 +676,14 @@ const Login = () => {
             isProcessing = false;
             return;
           }
-          
+
           // STRICT: Check email confirmation - if not confirmed, NEVER allow login
           // Database trigger blocks session creation, but we also check here
           if (!isEmailConfirmed(session.user)) {
             // Sign out IMMEDIATELY to prevent any auto-login
             await supabase.auth.signOut();
             localStorage.removeItem('authUser');
-            
+
             // Send confirmation email automatically
             try {
               const result = await sendOAuthConfirmationEmail(session.user.email);
@@ -704,14 +703,14 @@ const Login = () => {
               console.error('Error sending confirmation email:', err);
               setError(`Please confirm your email address (${session.user.email}) before signing in. Check your email for a confirmation link from Supabase.`);
             }
-            
+
             setGoogleLoading(false);
             isProcessing = false;
             // Stay on login page - NEVER redirect to dashboard until email is confirmed
             return;
           }
         }
-        
+
         // Only proceed if email is confirmed (or not Google OAuth)
         await handleUserSession(session.user);
         isProcessing = false;
@@ -720,9 +719,9 @@ const Login = () => {
         // Stay on login page
       } else if (event === 'TOKEN_REFRESHED' && session && session.user) {
         // Handle token refresh - check email confirmation again
-        const isGoogleAuth = session.user.app_metadata?.provider === 'google' || 
-                            session.user.identities?.some(identity => identity.provider === 'google');
-        
+        const isGoogleAuth = session.user.app_metadata?.provider === 'google' ||
+          session.user.identities?.some(identity => identity.provider === 'google');
+
         if (isGoogleAuth && !isEmailConfirmed(session.user)) {
           await supabase.auth.signOut();
           localStorage.removeItem('authUser');
@@ -730,9 +729,9 @@ const Login = () => {
         }
       } else if (event === 'USER_UPDATED' && session && session.user) {
         // Handle email confirmation - when user confirms email via link
-        const isGoogleAuth = session.user.app_metadata?.provider === 'google' || 
-                            session.user.identities?.some(identity => identity.provider === 'google');
-        
+        const isGoogleAuth = session.user.app_metadata?.provider === 'google' ||
+          session.user.identities?.some(identity => identity.provider === 'google');
+
         if (isGoogleAuth && isEmailConfirmed(session.user)) {
           // Email is now confirmed, allow login
           setError(''); // Clear any error messages
@@ -759,9 +758,9 @@ const Login = () => {
       }
 
       // Check if this is a Google OAuth sign-in by checking the provider
-      const isGoogleAuth = user.app_metadata?.provider === 'google' || 
-                          user.identities?.some(identity => identity.provider === 'google');
-      
+      const isGoogleAuth = user.app_metadata?.provider === 'google' ||
+        user.identities?.some(identity => identity.provider === 'google');
+
       // If Google OAuth, validate email domain and require confirmation BEFORE proceeding
       if (isGoogleAuth && user.email) {
         // Step 1: Validate email domain - MUST be @tup.edu.ph
@@ -775,18 +774,18 @@ const Login = () => {
           setGoogleLoading(false);
           return;
         }
-        
+
         // Step 2: For Google OAuth users, ALWAYS require email confirmation
         // Even if OAuth provider says email is verified, we require our own confirmation
         if (!isEmailConfirmed(user)) {
           // Sign out user immediately
           await supabase.auth.signOut();
           localStorage.removeItem('authUser');
-          
+
           // Send confirmation email
           try {
             const result = await sendOAuthConfirmationEmail(user.email);
-            
+
             if (result.success) {
               setError(`✅ A confirmation email has been sent to ${user.email}. Please check your email (including spam folder) and click the confirmation link to complete your sign-in.`);
             } else {
@@ -803,7 +802,7 @@ const Login = () => {
             console.error('Error sending confirmation email:', err);
             setError(`Email confirmation required for ${user.email}. Please check your email for a confirmation link.`);
           }
-          
+
           setGoogleLoading(false);
           return; // Stop here - user must confirm email first
         }
@@ -811,7 +810,7 @@ const Login = () => {
 
       // Check if user has MFA enabled
       const { data: factors, error: factorsError } = await supabase.auth.mfa.listFactors();
-      
+
       if (factorsError) {
         console.error('Error checking MFA factors:', factorsError);
       }
@@ -838,7 +837,7 @@ const Login = () => {
       // Get user role from user metadata or profiles table
       let userRole = user?.user_metadata?.role || 'Student';
       let fullName = user?.user_metadata?.full_name || user?.user_metadata?.name || user?.user_metadata?.display_name || '';
-      
+
       // Check if user exists in secureshare_users table
       // Use maybeSingle() to avoid errors when user doesn't exist (prevents 406 errors)
       const { data: profileData, error: profileError } = await supabase
@@ -846,12 +845,12 @@ const Login = () => {
         .select('role, full_name, email')
         .eq('user_id', user.id)
         .maybeSingle(); // Use maybeSingle() instead of single() - returns null instead of error when no row found
-      
+
       if (profileData) {
         // User exists, use their role
         userRole = profileData.role;
-        fullName = profileData.full_name || 
-          (profileData.first_name && profileData.last_name 
+        fullName = profileData.full_name ||
+          (profileData.first_name && profileData.last_name
             ? `${profileData.first_name} ${profileData.last_name}`.trim()
             : profileData.first_name || profileData.last_name || fullName);
       } else {
@@ -861,7 +860,7 @@ const Login = () => {
         const firstName = nameParts[0] || '';
         const lastName = nameParts.slice(1).join(' ') || '';
         const fullNameValue = fullName || user.email?.split('@')[0] || 'User';
-        
+
         // Use upsert with onConflict to handle existing users gracefully (prevents 409 errors)
         const { data: upsertedData, error: upsertError } = await supabase
           .from('secureshare_users')
@@ -882,18 +881,18 @@ const Login = () => {
 
         if (upsertError) {
           console.error('Error upserting user profile:', upsertError);
-          
+
           // If upsert fails due to conflict or other issues, try to fetch existing profile
-          if (upsertError.code === '23505' || upsertError.code === 'PGRST116' || 
-              upsertError.message?.includes('duplicate') || upsertError.message?.includes('409') ||
-              upsertError.message?.includes('Conflict')) {
+          if (upsertError.code === '23505' || upsertError.code === 'PGRST116' ||
+            upsertError.message?.includes('duplicate') || upsertError.message?.includes('409') ||
+            upsertError.message?.includes('Conflict')) {
             // User might already exist, try to fetch it
             const { data: existingProfile } = await supabase
               .from('secureshare_users')
               .select('role, full_name')
               .eq('user_id', user.id)
               .maybeSingle();
-            
+
             if (existingProfile) {
               userRole = existingProfile.role;
               fullName = existingProfile.full_name || fullName;
@@ -918,11 +917,11 @@ const Login = () => {
       // Store user session
       localStorage.setItem(
         'authUser',
-        JSON.stringify({ 
+        JSON.stringify({
           id: user.id,
           email: user.email,
           fullName: fullName || user.email?.split('@')[0] || 'User',
-          role: userRole 
+          role: userRole
         })
       );
 
@@ -976,7 +975,7 @@ const Login = () => {
 
       if (signInError) {
         console.error('Google OAuth error:', signInError);
-        
+
         // Provide user-friendly error messages
         if (signInError.message?.includes('not enabled') || signInError.message?.includes('Unsupported provider')) {
           setError('Google sign-in is not enabled. Please contact your administrator to enable Google OAuth in Supabase settings.');
@@ -993,7 +992,7 @@ const Login = () => {
       // The redirect will happen automatically
     } catch (err) {
       console.error('Google sign-in error:', err);
-      
+
       // Handle different error types
       if (err.message?.includes('not enabled') || err.message?.includes('Unsupported provider')) {
         setError('Google sign-in is not enabled. Please enable Google OAuth in Supabase Dashboard > Authentication > Providers.');
@@ -1025,10 +1024,36 @@ const Login = () => {
 
       if (signInError) throw signInError;
 
+      // Check MFA status for email/password users (not Google OAuth)
+      // Import the mfaApi functions dynamically to avoid issues
+      try {
+        const { getMfaStatus } = await import('../../utils/mfaApi');
+        const mfaStatus = await getMfaStatus();
+
+        // If user has MFA enabled but not at AAL2, show verification
+        if (mfaStatus.hasMfaEnabled && mfaStatus.currentLevel === 'aal1') {
+          setPendingUser(data.user);
+          setShowMFAVerification(true);
+          setLoading(false);
+          return;
+        }
+
+        // If user doesn't have MFA enabled and is not a Google user, prompt enrollment
+        if (!mfaStatus.hasMfaEnabled && !mfaStatus.isGoogleAuth) {
+          setPendingUser(data.user);
+          setShowMFAEnrollment(true);
+          setLoading(false);
+          return;
+        }
+      } catch (mfaErr) {
+        // If MFA check fails (e.g., API not ready), continue with normal flow
+        console.warn('MFA check failed, continuing with normal login:', mfaErr.message);
+      }
+
       // Get user role from user metadata or profiles table
       let userRole = data.user?.user_metadata?.role || 'Student';
       let fullName = '';
-      
+
       // If role is not in metadata, try to fetch from profiles table
       if (!userRole || userRole === 'student' || userRole === 'Student') {
         const { data: profileData } = await supabase
@@ -1036,7 +1061,7 @@ const Login = () => {
           .select('role, full_name')
           .eq('user_id', data.user.id)
           .maybeSingle();
-        
+
         if (profileData) {
           userRole = profileData.role;
           fullName = profileData.full_name || '';
@@ -1046,11 +1071,11 @@ const Login = () => {
       // Store user session
       localStorage.setItem(
         'authUser',
-        JSON.stringify({ 
+        JSON.stringify({
           id: data.user.id,
           email: data.user.email,
           fullName: fullName || data.user.user_metadata?.full_name || data.user.email?.split('@')[0] || 'User',
-          role: userRole 
+          role: userRole
         })
       );
 
@@ -1078,88 +1103,88 @@ const Login = () => {
         <section className='w-full min-h-[calc(100vh-120px)] flex items-start py-4'>
           <div className='w-full min-h-full rounded-3xl bg-white/30 backdrop-blur-xl border border-white/20 shadow-2xl px-6 py-8 lg:px-12 lg:py-12 text-lg flex flex-col lg:flex-row items-start gap-12'>
             <div className='w-full lg:max-w-2xl'>
-            <h1 className='text-4xl lg:text-7xl text-[#7A1C1C] font-black tracking-tight mb-5 '>
-              Secure File Sharing for Academic Excellence
-            </h1>
-            <p className='mb-10'>
-            A trusted platform for students and teachers to share assignments, lecture notes, and research documents with end-to-end encryption and role-based access control.
-            </p>
-            <ul className='flex flex-col sm:flex-row gap-4 lg:gap-10'>
-              <li>
-                <div className='bg-white/30 backdrop-blur-xl border border-white/40 shadow-lg hover:bg-white/50 hover:-translate-y-1 hover:shadow-2xl px-6 py-5 text-sm rounded-2xl transition-all duration-300 cursor-pointer'>
-                   <div className="bg-white/60 inline-flex items-center justify-center px-3 py-1 rounded-md mb-3 border border-white/40">
-                    <FaLock size={20} color="#7A1C1C" strokeWidth={2.5} />
+              <h1 className='text-4xl lg:text-7xl text-[#7A1C1C] font-black tracking-tight mb-5 '>
+                Secure File Sharing for Academic Excellence
+              </h1>
+              <p className='mb-10'>
+                A trusted platform for students and teachers to share assignments, lecture notes, and research documents with end-to-end encryption and role-based access control.
+              </p>
+              <ul className='flex flex-col sm:flex-row gap-4 lg:gap-10'>
+                <li>
+                  <div className='bg-white/30 backdrop-blur-xl border border-white/40 shadow-lg hover:bg-white/50 hover:-translate-y-1 hover:shadow-2xl px-6 py-5 text-sm rounded-2xl transition-all duration-300 cursor-pointer'>
+                    <div className="bg-white/60 inline-flex items-center justify-center px-3 py-1 rounded-md mb-3 border border-white/40">
+                      <FaLock size={20} color="#7A1C1C" strokeWidth={2.5} />
+                    </div>
+                    <span className='font-semibold block text-[#4B1B1B]'>Encrypted</span>
+                    <span className='text-xs block mt-1 text-[#4B1B1B]/80'>End-to-end encryption for all file transfers and storage</span>
                   </div>
-                  <span className='font-semibold block text-[#4B1B1B]'>Encrypted</span>
-                  <span className='text-xs block mt-1 text-[#4B1B1B]/80'>End-to-end encryption for all file transfers and storage</span>
-                </div>
-              </li>
-              <li>
-                <div className='bg-white/30 backdrop-blur-xl border border-white/40 shadow-lg hover:bg-white/50 hover:-translate-y-1 hover:shadow-2xl px-6 py-5 text-sm rounded-2xl transition-all duration-300 cursor-pointer'>
-                  <div className="bg-white/60 inline-flex items-center justify-center px-3 py-1 rounded-md mb-3 border border-white/40">
-                    <FaUsers size={22} color="#7A1C1C" strokeWidth={2.5} />
+                </li>
+                <li>
+                  <div className='bg-white/30 backdrop-blur-xl border border-white/40 shadow-lg hover:bg-white/50 hover:-translate-y-1 hover:shadow-2xl px-6 py-5 text-sm rounded-2xl transition-all duration-300 cursor-pointer'>
+                    <div className="bg-white/60 inline-flex items-center justify-center px-3 py-1 rounded-md mb-3 border border-white/40">
+                      <FaUsers size={22} color="#7A1C1C" strokeWidth={2.5} />
+                    </div>
+                    <span className='font-semibold block text-[#4B1B1B]'>Role-Based</span>
+                    <span className='text-xs block mt-1 text-[#4B1B1B]/80'>Separate access controls for students and teachers</span>
                   </div>
-                  <span className='font-semibold block text-[#4B1B1B]'>Role-Based</span>
-                  <span className='text-xs block mt-1 text-[#4B1B1B]/80'>Separate access controls for students and teachers</span>
-                </div>
-              </li>
-              <li>
-                <div className='bg-white/30 backdrop-blur-xl border border-white/40 shadow-lg hover:bg-white/50 hover:-translate-y-1 hover:shadow-2xl px-6 py-5 text-sm rounded-2xl transition-all duration-300 cursor-pointer'>
-                  <div className="bg-white/60 inline-flex items-center justify-center px-3 py-1 rounded-md mb-3 border border-white/40">
-                    <IoShieldCheckmark size={20} color="#7A1C1C" strokeWidth={2.5} /> 
+                </li>
+                <li>
+                  <div className='bg-white/30 backdrop-blur-xl border border-white/40 shadow-lg hover:bg-white/50 hover:-translate-y-1 hover:shadow-2xl px-6 py-5 text-sm rounded-2xl transition-all duration-300 cursor-pointer'>
+                    <div className="bg-white/60 inline-flex items-center justify-center px-3 py-1 rounded-md mb-3 border border-white/40">
+                      <IoShieldCheckmark size={20} color="#7A1C1C" strokeWidth={2.5} />
+                    </div>
+                    <span className='font-semibold block text-[#4B1B1B]'>Reliable</span>
+                    <span className='text-xs block mt-1 text-[#4B1B1B]/80'>Secure database storage with backup and recovery</span>
                   </div>
-                  <span className='font-semibold block text-[#4B1B1B]'>Reliable</span>
-                  <span className='text-xs block mt-1 text-[#4B1B1B]/80'>Secure database storage with backup and recovery</span>
-                </div>
-              </li>
-            </ul>
-          </div>
+                </li>
+              </ul>
+            </div>
 
-          <div className='w-full lg:max-w-sm rounded-2xl bg-white/40 backdrop-blur-lg text-center p-8 border border-white/50 shadow-2xl text-[#4B1B1B] lg:ml-auto'>
+            <div className='w-full lg:max-w-sm rounded-2xl bg-white/40 backdrop-blur-lg text-center p-8 border border-white/50 shadow-2xl text-[#4B1B1B] lg:ml-auto'>
               <div className="flex flex-col items-center space-y-2 mb-6">
-              <div className='bg-gradient-to-br from-[#7A1C1C] to-[#9B2D2D] p-2.5 rounded-lg shadow-lg'>
-                <ShieldCheck className="text-white w-8 h-8" />
-              </div>
+                <div className='bg-gradient-to-br from-[#7A1C1C] to-[#9B2D2D] p-2.5 rounded-lg shadow-lg'>
+                  <ShieldCheck className="text-white w-8 h-8" />
+                </div>
                 <h1 className="text-xl font-bold text-[#7A1C1C]">Welcome to SecureShare</h1>
               </div>
 
-            <p className="font-light text-sm mb-6">
-              Sign in to access your secure academic files
-            </p>
+              <p className="font-light text-sm mb-6">
+                Sign in to access your secure academic files
+              </p>
 
-            {error && (
-              <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg text-sm">
-                {error}
-              </div>
-            )}
+              {error && (
+                <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg text-sm">
+                  {error}
+                </div>
+              )}
 
-            <div className="w-full max-w-xs mx-auto">
+              <div className="w-full max-w-xs mx-auto">
                 <label className="flex justify-start text-sm font-semibold text-[#7A1C1C] mb-1">
-                    Email
+                  Email
                 </label>
                 <div className="text-sm flex items-center h-10 border border-gray-400 rounded-lg px-3 mb-4">
                   <Mail size={20} color="#7A1C1C" className="mr-2" />
-                    <input
+                  <input
                     type="email"
                     placeholder="student@university.edu"
                     className="w-full outline-none bg-transparent"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    />
+                  />
                 </div>
 
                 <label className="flex justify-start text-sm font-semibold text-[#7A1C1C] mb-1">
-                    Password
+                  Password
                 </label>
                 <div className="text-sm flex items-center h-10 border border-gray-400 rounded-lg px-3 mb-4">
-                  <Lock size={20} color="#7A1C1C" className='mr-2'/>
-                    <input
+                  <Lock size={20} color="#7A1C1C" className='mr-2' />
+                  <input
                     type="password"
                     placeholder="Enter your password"
                     className="w-full outline-none bg-transparent"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    />
+                  />
                 </div>
 
                 {/* Google Sign In Button */}
@@ -1208,20 +1233,20 @@ const Login = () => {
                   </div>
                 </div>
 
-                  <button 
-                    onClick={handleSubmit} 
-                    disabled={loading || googleLoading}
-                    className="text-sm w-full bg-[#7A1C1C] hover:bg-[#5a1515] text-white font-semibold py-2.5 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {loading ? "Loading..." : "Sign In"}
-                  </button>
-                
+                <button
+                  onClick={handleSubmit}
+                  disabled={loading || googleLoading}
+                  className="text-sm w-full bg-[#7A1C1C] hover:bg-[#5a1515] text-white font-semibold py-2.5 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {loading ? "Loading..." : "Sign In"}
+                </button>
 
+
+              </div>
             </div>
           </div>
-          </div>
         </section>
-      </header>
+      </header >
 
       {showMFAEnrollment && (
         <MFAEnrollment
@@ -1236,17 +1261,18 @@ const Login = () => {
         />
       )}
 
-      {showMFAVerification && mfaChallenge && (
-        <MFAVerification
-          challenge={mfaChallenge}
-          onVerified={handleMFAVerified}
-          onError={(err) => {
-            setError(err.message || 'MFA verification failed');
-            setShowMFAVerification(false);
-          }}
-        />
-      )}
-    </div>
+      {
+        showMFAVerification && (
+          <MFAVerification
+            onVerified={handleMFAVerified}
+            onError={(err) => {
+              setError(err.message || 'MFA verification failed');
+              setShowMFAVerification(false);
+            }}
+          />
+        )
+      }
+    </div >
   );
 };
 
