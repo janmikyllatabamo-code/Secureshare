@@ -79,15 +79,17 @@ const Login = () => {
           const userEmail = emailFromUser || emailFromMetadata || emailFromIdentity;
 
           if (userEmail) {
-            // Capture email immediately before any sign-out happens
-            if (!isEmailConfirmed(session.user)) {
+            // Skip email confirmation for Google OAuth with @tup.edu.ph domain
+            const skipConfirmation = isGoogleAuth && isValidTUPEmail(userEmail);
+
+            // Only send confirmation email if NOT skipping and email NOT confirmed
+            if (!skipConfirmation && !isEmailConfirmed(session.user)) {
               console.log('📧 Captured OAuth email before sign-out:', userEmail);
               capturedOAuthEmailRef.current = userEmail;
 
-              // IMMEDIATELY send confirmation email using Supabase Auth while we have the session
+              // Send confirmation email
               console.log('🚀 Sending confirmation email via Supabase Auth to:', userEmail);
               try {
-                // Try Supabase Auth resend first (proper method)
                 const { error: resendError } = await supabase.auth.resend({
                   type: 'signup',
                   email: userEmail,
@@ -113,6 +115,8 @@ const Login = () => {
               } catch (err) {
                 console.error('❌ Error sending confirmation email:', err);
               }
+            } else if (skipConfirmation) {
+              console.log('✅ Google OAuth with @tup.edu.ph - skipping email confirmation');
             }
           } else {
             console.log('⚠️  No email found in Google OAuth response in onAuthStateChange');
