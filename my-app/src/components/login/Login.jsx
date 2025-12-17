@@ -187,8 +187,11 @@ const Login = () => {
                   identityEmail: emailFromIdentity
                 });
 
-                // Send confirmation email immediately while we have the session using Supabase Auth
-                if (!isEmailConfirmed(currentSession.user)) {
+                // Skip email confirmation for Google OAuth with valid @tup.edu.ph domain
+                // Google already verifies email ownership, and we validate the domain
+                const skipConfirmation = isGoogleAuth && isValidTUPEmail(userEmail);
+
+                if (!skipConfirmation && !isEmailConfirmed(currentSession.user)) {
                   console.log('🚀 Sending confirmation email via Supabase Auth to:', userEmail);
                   try {
                     // FIRST: Try using Supabase Auth resend directly (this is the proper way)
@@ -563,10 +566,11 @@ const Login = () => {
               return;
             }
 
-            // STRICT: Check email confirmation - if not confirmed, stay on login page
-            // Database trigger ensures email_confirmed_at is NULL, but double-check here
+            // Skip email confirmation for Google OAuth with valid @tup.edu.ph domain
+            const skipConfirmation = isGoogleAuth && isValidTUPEmail(sessionToUse.user.email);
+
             // eslint-disable-next-line no-undef
-            if (!isEmailConfirmed(sessionToUse.user)) {
+            if (!skipConfirmation && !isEmailConfirmed(sessionToUse.user)) {
               // Sign out IMMEDIATELY to prevent any auto-login
               await supabase.auth.signOut();
               localStorage.removeItem('authUser');
@@ -634,18 +638,20 @@ const Login = () => {
           const isGoogleAuth = session.user.app_metadata?.provider === 'google' ||
             session.user.identities?.some(identity => identity.provider === 'google');
 
-          if (isGoogleAuth && !isEmailConfirmed(session.user)) {
-            // Sign out if email not confirmed
+          // Skip email confirmation for Google OAuth with valid @tup.edu.ph domain
+          if (isGoogleAuth && !isValidTUPEmail(session.user.email)) {
+            // Invalid domain - sign out
             await supabase.auth.signOut();
             localStorage.removeItem('authUser');
-            setError(`Please confirm your email address (${session.user.email}) before signing in.`);
+            setError('Only @tup.edu.ph email addresses are allowed for Google sign-in.');
             setGoogleLoading(false);
             isProcessing = false;
             return;
           }
 
-          // Only proceed if email is confirmed
-          if (!isGoogleAuth || isEmailConfirmed(session.user)) {
+          // For Google OAuth with @tup.edu.ph, email confirmation is not required
+          const skipConfirmation = isGoogleAuth && isValidTUPEmail(session.user.email);
+          if (!isGoogleAuth || skipConfirmation || isEmailConfirmed(session.user)) {
             await handleUserSession(session.user);
           }
           isProcessing = false;
@@ -677,9 +683,10 @@ const Login = () => {
             return;
           }
 
-          // STRICT: Check email confirmation - if not confirmed, NEVER allow login
-          // Database trigger blocks session creation, but we also check here
-          if (!isEmailConfirmed(session.user)) {
+          // Skip email confirmation for Google OAuth with valid @tup.edu.ph domain
+          const skipConfirmation = isGoogleAuth && isValidTUPEmail(session.user.email);
+
+          if (!skipConfirmation && !isEmailConfirmed(session.user)) {
             // Sign out IMMEDIATELY to prevent any auto-login
             await supabase.auth.signOut();
             localStorage.removeItem('authUser');
@@ -722,10 +729,11 @@ const Login = () => {
         const isGoogleAuth = session.user.app_metadata?.provider === 'google' ||
           session.user.identities?.some(identity => identity.provider === 'google');
 
-        if (isGoogleAuth && !isEmailConfirmed(session.user)) {
+        // Skip email confirmation for Google OAuth with @tup.edu.ph domain
+        if (isGoogleAuth && !isValidTUPEmail(session.user.email)) {
           await supabase.auth.signOut();
           localStorage.removeItem('authUser');
-          setError(`Please confirm your email address (${session.user.email}) before signing in.`);
+          setError('Only @tup.edu.ph email addresses are allowed for Google sign-in.');
         }
       } else if (event === 'USER_UPDATED' && session && session.user) {
         // Handle email confirmation - when user confirms email via link
@@ -775,9 +783,10 @@ const Login = () => {
           return;
         }
 
-        // Step 2: For Google OAuth users, ALWAYS require email confirmation
-        // Even if OAuth provider says email is verified, we require our own confirmation
-        if (!isEmailConfirmed(user)) {
+        // Step 2: Skip email confirmation for Google OAuth with @tup.edu.ph domain
+        // Google already verifies email ownership, domain check is sufficient
+        const skipConfirmation = true; // @tup.edu.ph domain already validated above
+        if (!skipConfirmation && !isEmailConfirmed(user)) {
           // Sign out user immediately
           await supabase.auth.signOut();
           localStorage.removeItem('authUser');
